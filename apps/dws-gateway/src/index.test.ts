@@ -16,6 +16,7 @@ const config: GatewayConfig = {
   token: "test-token",
   dwsBin: "dws",
   allowedGroups: new Set(["cid-good", "cid-partial", "cid-empty"]),
+  sendGroups: new Set(["cid-good"]),
   requestTimeoutMs: 5_000,
   maxItems: 1_000,
   maxConcurrent: 2,
@@ -45,6 +46,9 @@ const runner: DwsRunner = async (args) => {
       chats: [{ openConversationId: "cid-good", name: "测试群", type: "group" }],
       count: 1,
     });
+  }
+  if (args[1] === "+send-to-group") {
+    return result({ success: true, sent: true });
   }
   const groupIndex = args.indexOf("--group");
   const groupId = groupIndex >= 0 ? args[groupIndex + 1] : "";
@@ -231,6 +235,24 @@ describe("dws gateway", () => {
     expect(payload.data.complete).toBe(false);
     expect(payload.data.count).toBe(0);
     expect(payload.data.failures).toHaveLength(1);
+  });
+
+  it("sends only to allowlisted blackboard groups", async () => {
+    const { baseUrl } = await start();
+    const sent = await fetch(`${baseUrl}/v1/chat/send`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({ groupId: "cid-good", text: "blackboard" }),
+    });
+    expect(sent.status).toBe(200);
+    expect(await sent.json()).toMatchObject({ success: true, data: { sent: true } });
+
+    const denied = await fetch(`${baseUrl}/v1/chat/send`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({ groupId: "cid-other", text: "blackboard" }),
+    });
+    expect(denied.status).toBe(403);
   });
 
   it("searches conversations", async () => {

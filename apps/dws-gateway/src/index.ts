@@ -13,6 +13,7 @@ export interface GatewayConfig {
   token: string;
   dwsBin: string;
   allowedGroups: Set<string>;
+  sendGroups: Set<string>;
   requestTimeoutMs: number;
   maxItems: number;
   maxConcurrent: number;
@@ -322,6 +323,12 @@ export function loadGatewayConfig(env: NodeJS.ProcessEnv = process.env): Gateway
       .map((value) => value.trim())
       .filter(Boolean),
   );
+  const sendGroups = new Set(
+    (env.DWS_SEND_GROUPS ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
   const port = Number(env.DWS_GATEWAY_PORT ?? 8787);
   if (!Number.isInteger(port) || port <= 0 || port > 65535) {
     throw new Error("DWS_GATEWAY_PORT must be a valid port.");
@@ -332,6 +339,7 @@ export function loadGatewayConfig(env: NodeJS.ProcessEnv = process.env): Gateway
     token,
     dwsBin: env.DWS_BIN?.trim() ?? "dws",
     allowedGroups,
+    sendGroups,
     requestTimeoutMs: Math.max(5, Number(env.DWS_REQUEST_TIMEOUT_SECONDS ?? 120)) * 1_000,
     maxItems: Math.max(1, Number(env.DWS_MAX_ITEMS ?? 5_000)),
     maxConcurrent: Math.max(1, Number(env.DWS_MAX_CONCURRENT ?? 2)),
@@ -468,6 +476,52 @@ export function createGatewayServer(options: GatewayOptions): Server {
     return { chats, count: chats.length };
   };
 
+  const handleSend = async (body: unknown): Promise<unknown> => {
+    const record = asRecord(body);
+    const groupId = stringValue(record?.groupId);
+    const text = stringValue(record?.text);
+    if (!groupId || !text) {
+      throw new Error("groupId and text are required.");
+    }
+    if (config.sendGroups.size === 0) {
+      const error = new Error("DWS_SEND_GROUPS is empty; sending is disabled.");
+      (error as Error & { status?: number }).status = 403;
+      throw error;
+    }
+    if (!config.sendGroups.has(groupId)) {
+      const error = new Error("This group is not in DWS_SEND_GROUPS.");
+      (error as Error & { status?: number }).status = 403;
+      throw error;
+    }
+    if (text.length > 10_000) {
+      throw new Error("text is too long (max 10000 characters).");
+    }
+
+    const result = await runner(
+      [
+        "chat",
+        "+send-to-group",
+        "--group",
+        groupId,
+        "--content",
+        text,
+        "--yes",
+        "--format",
+        "json",
+      ],
+      config.requestTimeoutMs,
+    );
+    const parsed = parseJson(result.stdout);
+    if (parsed === undefined) {
+      throw commandError(result, undefined);
+    }
+    const parsedRecord = asRecord(parsed);
+    if (parsedRecord?.error) {
+      throw commandError(result, parsed);
+    }
+    return { sent: true, groupId };
+  };
+
   const handle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const started = Date.now();
     const path = (req.url ?? "/").split("?")[0] ?? "/";
@@ -526,6 +580,22 @@ export function createGatewayServer(options: GatewayOptions): Server {
         try {
           const body = await readBody(req);
           send(res, 200, { success: true, data: await handleMessages(body) });
+        } finally {
+          active -= 1;
+        }
+        return;
+      }
+
+      if (req.method === "POST" && path === "/v1/chat/send") {
+        if (active >= config.maxConcurrent) {
+          status = 429;
+          send(res, 429, { success: false, error: "Too many concurrent DWS requests." });
+          return;
+        }
+        active += 1;
+        try {
+          const body = await readBody(req);
+          send(res, 200, { success: true, data: await handleSend(body) });
         } finally {
           active -= 1;
         }

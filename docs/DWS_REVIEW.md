@@ -152,3 +152,20 @@ A 处理失败时也会写一条记录，带 `error` 字段，方便排查。
 - 消息会进入 A 的 RAG，模型判断基于检索到的历史
 - `related`/`alreadyDone` 是模型判断，不是绝对事实；不确定时应以 `alreadyDone=false` 处理
 - 订阅进程断线会自动重启
+
+## 黑板推送群
+
+B 的 gateway 可以配置一个专门的推送群：
+
+```bash
+DWS_SEND_GROUPS=cidx7ygN7Xd06+ARqXKam58gA==
+```
+
+并通过：
+
+```text
+POST /v1/chat/send
+{"groupId":"cidx7ygN7Xd06+ARqXKam58gA==","text":"黑板内容"}
+```
+
+发送 Markdown 消息。当前使用 DWS 的**当前登录用户身份**发送；如果希望以机器人身份发送，需要 `robotCode` 和企业内机器人发送消息权限。发送接口只允许 `DWS_SEND_GROUPS` 中的群。
