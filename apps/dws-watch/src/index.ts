@@ -9,6 +9,8 @@ export interface WatchConfig {
   groups: string[];
   watchAllDirect: boolean;
   ignoreSenders: Set<string>;
+  ignoreOpenIds: Set<string>;
+  selfOpenDingTalkId?: string;
   reviewUrl: string;
   reviewToken: string;
   logPath: string;
@@ -25,6 +27,7 @@ interface EventMessage {
   createdAt: number;
   eventId?: string;
   aiSend: boolean;
+  senderIsSelf: boolean;
 }
 
 interface ReviewLogEntry {
@@ -66,6 +69,8 @@ export function loadWatchConfig(env: NodeJS.ProcessEnv = process.env): WatchConf
     ignoreSenders: new Set(
       envCsv(env.DWS_WATCH_IGNORE_SENDERS).map((value) => value.toLowerCase()),
     ),
+    ignoreOpenIds: new Set(envCsv(env.DWS_WATCH_IGNORE_OPEN_IDS)),
+    selfOpenDingTalkId: env.DWS_WATCH_SELF_OPEN_DINGTALK_ID?.trim() || undefined,
     reviewUrl: reviewUrl.replace(/\/$/, ""),
     reviewToken,
     logPath: env.DWS_WATCH_LOG?.trim() ?? resolve(homedir(), "dws-watch", "reviews.jsonl"),
@@ -179,6 +184,7 @@ export function extractEvent(raw: unknown, source: string): EventMessage | undef
     ),
     eventId: stringValue(find(root.event_id, root.eventId, payload.event_id)),
     aiSend,
+    senderIsSelf: false,
   };
 }
 
@@ -213,6 +219,7 @@ async function postReview(
       senderOpenDingTalkId: message.senderOpenDingTalkId,
       content: message.content,
       createdAt: message.createdAt,
+      senderIsSelf: message.senderIsSelf,
     }),
     signal: AbortSignal.timeout(180_000),
   });
@@ -248,7 +255,18 @@ export class DwsWatcher {
   }
 
   private isIgnoredSender(message: EventMessage): boolean {
-    return Boolean(message.sender && this.config.ignoreSenders.has(message.sender.toLowerCase()));
+    return Boolean(
+      (message.sender && this.config.ignoreSenders.has(message.sender.toLowerCase())) ||
+        (message.senderOpenDingTalkId &&
+          this.config.ignoreOpenIds.has(message.senderOpenDingTalkId)),
+    );
+  }
+
+  private isSelfMessage(message: EventMessage): boolean {
+    return Boolean(
+      this.config.selfOpenDingTalkId &&
+        message.senderOpenDingTalkId === this.config.selfOpenDingTalkId,
+    );
   }
 
   start(): void {
@@ -374,6 +392,7 @@ export class DwsWatcher {
     if (!message || message.aiSend || this.isIgnoredSender(message)) {
       return;
     }
+    message.senderIsSelf = this.isSelfMessage(message);
     if (this.seen.has(message.messageId)) {
       return;
     }

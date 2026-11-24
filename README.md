@@ -165,7 +165,7 @@ npm run dws-watch          # 前台调试
 npm run dws-watch:start    # 运行构建产物
 ```
 
-审阅后会更新黑板、推送到「黑板推送」群，并在 MonkeyScan Review引擎 群和单聊中自动回复。部署、黑板和日志格式见 [`docs/DWS_REVIEW.md`](docs/DWS_REVIEW.md)。B 的 gateway 通过 `DWS_SEND_GROUPS` 限制黑板群，通过 `DWS_REPLY_GROUPS` / `DWS_REPLY_DMS` 限制自动回复范围。
+审阅后会更新黑板、推送到「黑板推送」群，并在 MonkeyScan Review引擎 群和单聊中自动回复。你自己发出的消息仍会写入 RAG，但不会触发回复或黑板动作，避免自我循环。部署、黑板和日志格式见 [`docs/DWS_REVIEW.md`](docs/DWS_REVIEW.md)。B 的 gateway 通过 `DWS_SEND_GROUPS` 限制黑板群，通过 `DWS_REPLY_GROUPS` / `DWS_REPLY_DMS` 限制自动回复范围。
 
 RAG 会记录每轮对话并提供 `memory_search` 工具。默认使用 OpenAI 兼容的 embedding 接口，需配置 `RAG_EMBEDDING_API_KEY`（可选 `RAG_EMBEDDING_BASE_URL`）；本地调试可设 `RAG_EMBEDDING_PROVIDER=hash`。未配置凭证时 RAG 会自动跳过。
 

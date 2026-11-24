@@ -34,6 +34,7 @@ interface ReviewEvent {
   content: string;
   createdAt?: number;
   source?: string;
+  senderIsSelf?: boolean;
 }
 
 interface ReviewActions {
@@ -48,6 +49,7 @@ interface ReviewActions {
     text?: string;
     error?: string;
   };
+  skipped?: "self";
 }
 
 interface ReviewResponse {
@@ -89,6 +91,7 @@ function normalizeEvent(value: unknown): ReviewEvent {
     content,
     createdAt,
     source: stringValue(record.source),
+    senderIsSelf: record.senderIsSelf === true,
   };
 }
 
@@ -170,6 +173,14 @@ export async function createReviewServer(options: ReviewServerOptions): Promise<
       createdAt,
     };
     await store.addMessage(record);
+
+    if (event.senderIsSelf) {
+      logger?.info(
+        { messageId: event.messageId },
+        "self message stored in RAG; skipped review actions",
+      );
+      return { duplicate: false, actions: { skipped: "self" } };
+    }
 
     let hits: MemoryHit[] = [];
     try {

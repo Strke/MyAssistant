@@ -16,6 +16,7 @@ export interface GatewayConfig {
   sendGroups: Set<string>;
   replyGroups: Set<string>;
   replyDms: boolean;
+  selfOpenDingTalkId?: string;
   requestTimeoutMs: number;
   maxItems: number;
   maxConcurrent: number;
@@ -353,6 +354,7 @@ export function loadGatewayConfig(env: NodeJS.ProcessEnv = process.env): Gateway
     sendGroups,
     replyGroups,
     replyDms,
+    selfOpenDingTalkId: env.DWS_SELF_OPEN_DINGTALK_ID?.trim() || undefined,
     requestTimeoutMs: Math.max(5, Number(env.DWS_REQUEST_TIMEOUT_SECONDS ?? 120)) * 1_000,
     maxItems: Math.max(1, Number(env.DWS_MAX_ITEMS ?? 5_000)),
     maxConcurrent: Math.max(1, Number(env.DWS_MAX_CONCURRENT ?? 2)),
@@ -561,6 +563,11 @@ export function createGatewayServer(options: GatewayOptions): Server {
     }
     if (chatType === "direct" && !senderOpenDingTalkId) {
       throw new Error("senderOpenDingTalkId is required for direct replies.");
+    }
+    if (config.selfOpenDingTalkId && senderOpenDingTalkId === config.selfOpenDingTalkId) {
+      const error = new Error("Refusing to auto-reply to the current user's own message.");
+      (error as Error & { status?: number }).status = 403;
+      throw error;
     }
 
     const args = [

@@ -59,6 +59,9 @@ A_REVIEW_URL=https://renzelinmac-mini.taild927d7.ts.net
 A_REVIEW_TOKEN=与 A 的 REVIEW_TOKEN 一致
 DWS_WATCH_LOG=/Users/lin/dws-watch/reviews.jsonl
 DWS_WATCH_RESTART_MS=5000
+DWS_WATCH_SELF_OPEN_DINGTALK_ID=当前用户自己的openDingTalkId
+DWS_WATCH_IGNORE_SENDERS=邮箱助手,钉钉助手,钉钉小秘书
+DWS_WATCH_IGNORE_OPEN_IDS=
 ```
 
 `DWS_WATCH_GROUPS` 是群 `openConversationId`，多个用逗号分隔。`DWS_WATCH_DMS=all` 会监听全部单聊；默认留空，避免把所有私聊写入审阅库。
@@ -194,6 +197,8 @@ A 处理失败时也会写一条记录，带 `error` 字段，方便排查。
 - 消息会进入 A 的 RAG，模型判断基于检索到的历史
 - `related`/`alreadyDone` 是模型判断，不是绝对事实；不确定时应以 `alreadyDone=false` 处理
 - 默认跳过 `DWS_WATCH_IGNORE_SENDERS` 中的机器人发送者（邮箱助手、钉钉助手、钉钉小秘书）
+- 你自己发出的消息仍然写入 RAG，但会标记为 `senderIsSelf`，不进入模型判断、不自动回复、不更新黑板，避免自我回复循环
+- B gateway 也会拒绝回复发送者为当前用户的消息（`DWS_SELF_OPEN_DINGTALK_ID`）
 - 订阅进程断线会自动重启
 
 ## 黑板推送群
