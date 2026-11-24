@@ -1,0 +1,30 @@
+{
+  "name": "myassistant",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A personal assistant built on pi, with RAG memory, a local vault, DingTalk, and task delegation.",
+  "engines": {
+    "node": ">=22.19"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "tsx apps/assistant/src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.8",
+    "@types/node": "^22.20.5",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.1"
+  }
+}

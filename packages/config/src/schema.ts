@@ -1,0 +1,140 @@
+import { existsSync } from "node:fs";
+import { z } from "zod";
+
+const envBoolean = z.preprocess((value) => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes", "on"].includes(normalized)) {
+      return true;
+    }
+    if (["false", "0", "no", "off", ""].includes(normalized)) {
+      return false;
+    }
+  }
+  return value;
+}, z.boolean());
+
+const optionalString = z.string().min(1).optional();
+
+export const appConfigSchema = z.object({
+  app: z.object({
+    env: z.enum(["development", "test", "production"]).default("development"),
+    logLevel: z.enum(["trace", "debug", "info", "warn", "error", "fatal"]).default("info"),
+  }),
+  model: z.object({
+    provider: z.string().min(1).default("anthropic"),
+    id: z.string().min(1).default("claude-sonnet-4-6"),
+    apiKey: optionalString,
+    thinkingLevel: z
+      .enum(["off", "minimal", "low", "medium", "high", "xhigh", "max"])
+      .default("off"),
+  }),
+  agent: z.object({
+    workspace: z.string().min(1).default("."),
+    systemPromptFile: optionalString,
+  }),
+  dingtalk: z
+    .object({
+      enabled: envBoolean.default(false),
+      clientId: optionalString,
+      clientSecret: optionalString,
+      robotCode: optionalString,
+    })
+    .superRefine((value, ctx) => {
+      if (value.enabled && (!value.clientId || !value.clientSecret)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["clientId", "clientSecret"],
+          message:
+            "DINGTALK_CLIENT_ID and DINGTALK_CLIENT_SECRET are required when DingTalk is enabled",
+        });
+      }
+    }),
+  rag: z.object({
+    enabled: envBoolean.default(true),
+    dbPath: z.string().min(1).default("./data/assistant.db"),
+    topK: z.coerce.number().int().positive().default(8),
+    embedding: z.object({
+      provider: z.string().min(1).default("openai"),
+      model: z.string().min(1).default("text-embedding-3-large"),
+      dimensions: z.coerce.number().int().positive().default(3072),
+    }),
+  }),
+  vault: z.object({
+    path: z.string().min(1).default("./data/vault.enc"),
+    keychainService: z.string().min(1).default("com.myassistant.vault"),
+    keychainAccount: z.string().min(1).default("default"),
+    autoLockMinutes: z.coerce.number().int().positive().default(15),
+  }),
+  tasks: z.object({
+    enabled: envBoolean.default(true),
+    backend: z.enum(["local", "pi-subagent", "pi-rpc", "http-a2a"]).default("local"),
+  }),
+});
+
+export type AppConfig = z.infer<typeof appConfigSchema>;
+
+const clean = (value: string | undefined): string | undefined => {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+};
+
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
+  const raw = {
+    app: {
+      env: clean(env.NODE_ENV),
+      logLevel: clean(env.LOG_LEVEL),
+    },
+    model: {
+      provider: clean(env.MODEL_PROVIDER),
+      id: clean(env.MODEL_ID),
+      apiKey: clean(env.MODEL_API_KEY),
+      thinkingLevel: clean(env.MODEL_THINKING_LEVEL),
+    },
+    agent: {
+      workspace: clean(env.AGENT_WORKSPACE),
+      systemPromptFile: clean(env.AGENT_SYSTEM_PROMPT_FILE),
+    },
+    dingtalk: {
+      enabled: clean(env.DINGTALK_ENABLED),
+      clientId: clean(env.DINGTALK_CLIENT_ID),
+      clientSecret: clean(env.DINGTALK_CLIENT_SECRET),
+      robotCode: clean(env.DINGTALK_ROBOT_CODE),
+    },
+    rag: {
+      enabled: clean(env.RAG_ENABLED),
+      dbPath: clean(env.RAG_DB_PATH),
+      topK: clean(env.RAG_TOP_K),
+      embedding: {
+        provider: clean(env.RAG_EMBEDDING_PROVIDER),
+        model: clean(env.RAG_EMBEDDING_MODEL),
+        dimensions: clean(env.RAG_EMBEDDING_DIMENSIONS),
+      },
+    },
+    vault: {
+      path: clean(env.VAULT_PATH),
+      keychainService: clean(env.VAULT_KEYCHAIN_SERVICE),
+      keychainAccount: clean(env.VAULT_KEYCHAIN_ACCOUNT),
+      autoLockMinutes: clean(env.VAULT_AUTO_LOCK_MINUTES),
+    },
+    tasks: {
+      enabled: clean(env.TASKS_ENABLED),
+      backend: clean(env.TASKS_BACKEND),
+    },
+  };
+
+  return appConfigSchema.parse(raw);
+}
+
+export function loadConfigFromEnvFile(
+  path = ".env",
+  env: NodeJS.ProcessEnv = process.env,
+): AppConfig {
+  if (existsSync(path)) {
+    process.loadEnvFile(path);
+  }
+  return loadConfig(env);
+}

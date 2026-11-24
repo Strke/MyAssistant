@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@myassistant/config": ["packages/config/src/index.ts"],
+      "@myassistant/core": ["packages/core/src/index.ts"],
+      "@myassistant/rag": ["packages/rag/src/index.ts"],
+      "@myassistant/vault": ["packages/vault/src/index.ts"],
+      "@myassistant/channel-dingtalk": ["packages/channel-dingtalk/src/index.ts"],
+      "@myassistant/tasks": ["packages/tasks/src/index.ts"]
+    }
+  },
+  "include": ["packages/**/*.ts", "apps/**/*.ts", "vitest.config.ts"]
+}
