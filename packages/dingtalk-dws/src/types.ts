@@ -70,3 +70,20 @@ export interface ListMessagesInput {
   maxItems?: number;
   limit?: number;
 }
+
+export interface ReplyMessageInput {
+  conversationId: string;
+  messageId: string;
+  chatType: "group" | "direct";
+  senderOpenDingTalkId?: string;
+  text: string;
+}
+
+export interface SendMessageResult {
+  sent: boolean;
+  groupId: string;
+}
+
+export interface ReplyMessageResult {
+  sent: boolean;
+}

@@ -8,6 +8,7 @@ export interface WatchConfig {
   dwsBin: string;
   groups: string[];
   watchAllDirect: boolean;
+  ignoreSenders: Set<string>;
   reviewUrl: string;
   reviewToken: string;
   logPath: string;
@@ -23,6 +24,7 @@ interface EventMessage {
   content: string;
   createdAt: number;
   eventId?: string;
+  aiSend: boolean;
 }
 
 interface ReviewLogEntry {
@@ -30,6 +32,7 @@ interface ReviewLogEntry {
   source: string;
   message: EventMessage;
   decision?: unknown;
+  actions?: unknown;
   duplicate?: boolean;
   error?: string;
   durationMs: number;
@@ -60,6 +63,9 @@ export function loadWatchConfig(env: NodeJS.ProcessEnv = process.env): WatchConf
     dwsBin: env.DWS_BIN?.trim() ?? "dws",
     groups,
     watchAllDirect,
+    ignoreSenders: new Set(
+      envCsv(env.DWS_WATCH_IGNORE_SENDERS).map((value) => value.toLowerCase()),
+    ),
     reviewUrl: reviewUrl.replace(/\/$/, ""),
     reviewToken,
     logPath: env.DWS_WATCH_LOG?.trim() ?? resolve(homedir(), "dws-watch", "reviews.jsonl"),
@@ -141,6 +147,17 @@ export function extractEvent(raw: unknown, source: string): EventMessage | undef
       payload.chatType,
     ),
   );
+  const aiSendValue = find(
+    root.message_ai_send_flag,
+    root.messageAiSendFlag,
+    root.ai_send,
+    root.aiTag,
+    payload.message_ai_send_flag,
+    payload.messageAiSendFlag,
+    payload.aiTag,
+  );
+  const aiSend =
+    aiSendValue === true || aiSendValue === 1 || aiSendValue === "true" || aiSendValue === "1";
   return {
     messageId,
     conversationId,
@@ -161,6 +178,7 @@ export function extractEvent(raw: unknown, source: string): EventMessage | undef
       Date.now(),
     ),
     eventId: stringValue(find(root.event_id, root.eventId, payload.event_id)),
+    aiSend,
   };
 }
 
@@ -177,6 +195,7 @@ async function postReview(
 ): Promise<{
   duplicate: boolean;
   decision?: unknown;
+  actions?: unknown;
 }> {
   const response = await fetch(`${config.reviewUrl}/v1/dingtalk/review`, {
     method: "POST",
@@ -213,6 +232,7 @@ async function postReview(
   return {
     duplicate: body?.duplicate === true,
     decision: body?.decision,
+    actions: body?.actions,
   };
 }
 
@@ -225,6 +245,10 @@ export class DwsWatcher {
 
   constructor(config: WatchConfig) {
     this.config = config;
+  }
+
+  private isIgnoredSender(message: EventMessage): boolean {
+    return Boolean(message.sender && this.config.ignoreSenders.has(message.sender.toLowerCase()));
   }
 
   start(): void {
@@ -347,7 +371,7 @@ export class DwsWatcher {
       return;
     }
     const message = extractEvent(parsed, source);
-    if (!message) {
+    if (!message || message.aiSend || this.isIgnoredSender(message)) {
       return;
     }
     if (this.seen.has(message.messageId)) {
@@ -367,6 +391,7 @@ export class DwsWatcher {
         source,
         message,
         decision: result.decision,
+        actions: result.actions,
         duplicate: result.duplicate,
         durationMs: Date.now() - started,
       });

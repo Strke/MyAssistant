@@ -17,6 +17,8 @@ const config: GatewayConfig = {
   dwsBin: "dws",
   allowedGroups: new Set(["cid-good", "cid-partial", "cid-empty"]),
   sendGroups: new Set(["cid-good"]),
+  replyGroups: new Set(["cid-good"]),
+  replyDms: true,
   requestTimeoutMs: 5_000,
   maxItems: 1_000,
   maxConcurrent: 2,
@@ -47,7 +49,7 @@ const runner: DwsRunner = async (args) => {
       count: 1,
     });
   }
-  if (args[1] === "+send-to-group") {
+  if (args[1] === "+send-to-group" || args[1] === "+messages-reply") {
     return result({ success: true, sent: true });
   }
   const groupIndex = args.indexOf("--group");
@@ -253,6 +255,35 @@ describe("dws gateway", () => {
       body: JSON.stringify({ groupId: "cid-other", text: "blackboard" }),
     });
     expect(denied.status).toBe(403);
+  });
+
+  it("replies to allowlisted groups and direct messages", async () => {
+    const { baseUrl } = await start();
+    const groupReply = await fetch(`${baseUrl}/v1/chat/reply`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({
+        conversationId: "cid-good",
+        messageId: "msg-1",
+        chatType: "group",
+        text: "收到",
+      }),
+    });
+    expect(groupReply.status).toBe(200);
+    expect(await groupReply.json()).toMatchObject({ success: true, data: { sent: true } });
+
+    const directReply = await fetch(`${baseUrl}/v1/chat/reply`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({
+        conversationId: "cid-dm",
+        messageId: "msg-2",
+        chatType: "direct",
+        senderOpenDingTalkId: "u1",
+        text: "收到",
+      }),
+    });
+    expect(directReply.status).toBe(200);
   });
 
   it("searches conversations", async () => {

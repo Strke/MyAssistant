@@ -14,6 +14,8 @@ export interface GatewayConfig {
   dwsBin: string;
   allowedGroups: Set<string>;
   sendGroups: Set<string>;
+  replyGroups: Set<string>;
+  replyDms: boolean;
   requestTimeoutMs: number;
   maxItems: number;
   maxConcurrent: number;
@@ -329,6 +331,15 @@ export function loadGatewayConfig(env: NodeJS.ProcessEnv = process.env): Gateway
       .map((value) => value.trim())
       .filter(Boolean),
   );
+  const replyGroups = new Set(
+    (env.DWS_REPLY_GROUPS ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
+  const replyDms = ["1", "true", "all", "yes"].includes(
+    (env.DWS_REPLY_DMS ?? "").trim().toLowerCase(),
+  );
   const port = Number(env.DWS_GATEWAY_PORT ?? 8787);
   if (!Number.isInteger(port) || port <= 0 || port > 65535) {
     throw new Error("DWS_GATEWAY_PORT must be a valid port.");
@@ -340,6 +351,8 @@ export function loadGatewayConfig(env: NodeJS.ProcessEnv = process.env): Gateway
     dwsBin: env.DWS_BIN?.trim() ?? "dws",
     allowedGroups,
     sendGroups,
+    replyGroups,
+    replyDms,
     requestTimeoutMs: Math.max(5, Number(env.DWS_REQUEST_TIMEOUT_SECONDS ?? 120)) * 1_000,
     maxItems: Math.max(1, Number(env.DWS_MAX_ITEMS ?? 5_000)),
     maxConcurrent: Math.max(1, Number(env.DWS_MAX_CONCURRENT ?? 2)),
@@ -522,6 +535,66 @@ export function createGatewayServer(options: GatewayOptions): Server {
     return { sent: true, groupId };
   };
 
+  const handleReply = async (body: unknown): Promise<unknown> => {
+    const record = asRecord(body);
+    const conversationId = stringValue(record?.conversationId);
+    const messageId = stringValue(record?.messageId);
+    const text = stringValue(record?.text);
+    const chatType = record?.chatType === "group" ? "group" : "direct";
+    const senderOpenDingTalkId = stringValue(record?.senderOpenDingTalkId);
+    if (!conversationId || !messageId || !text) {
+      throw new Error("conversationId, messageId and text are required.");
+    }
+    if (text.length > 4_000) {
+      throw new Error("Reply text is too long (max 4000 characters).");
+    }
+    if (chatType === "group") {
+      if (!config.replyGroups.has(conversationId)) {
+        const error = new Error("This group is not in DWS_REPLY_GROUPS.");
+        (error as Error & { status?: number }).status = 403;
+        throw error;
+      }
+    } else if (!config.replyDms) {
+      const error = new Error("Direct-message replies are disabled; set DWS_REPLY_DMS=all.");
+      (error as Error & { status?: number }).status = 403;
+      throw error;
+    }
+    if (chatType === "direct" && !senderOpenDingTalkId) {
+      throw new Error("senderOpenDingTalkId is required for direct replies.");
+    }
+
+    const args = [
+      "chat",
+      "+messages-reply",
+      "--as",
+      "user",
+      "--message-id",
+      messageId,
+      "--content",
+      text,
+      "--idempotency-key",
+      `reply:${messageId}`,
+      "--yes",
+      "--format",
+      "json",
+    ];
+    if (chatType === "group") {
+      args.push("--group", conversationId);
+    } else if (senderOpenDingTalkId) {
+      args.push("--open-dingtalk-id", senderOpenDingTalkId);
+    }
+    const result = await runner(args, config.requestTimeoutMs);
+    const parsed = parseJson(result.stdout);
+    if (parsed === undefined) {
+      throw commandError(result, undefined);
+    }
+    const parsedRecord = asRecord(parsed);
+    if (parsedRecord?.error) {
+      throw commandError(result, parsed);
+    }
+    return { sent: true, conversationId, messageId };
+  };
+
   const handle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const started = Date.now();
     const path = (req.url ?? "/").split("?")[0] ?? "/";
@@ -596,6 +669,22 @@ export function createGatewayServer(options: GatewayOptions): Server {
         try {
           const body = await readBody(req);
           send(res, 200, { success: true, data: await handleSend(body) });
+        } finally {
+          active -= 1;
+        }
+        return;
+      }
+
+      if (req.method === "POST" && path === "/v1/chat/reply") {
+        if (active >= config.maxConcurrent) {
+          status = 429;
+          send(res, 429, { success: false, error: "Too many concurrent DWS requests." });
+          return;
+        }
+        active += 1;
+        try {
+          const body = await readBody(req);
+          send(res, 200, { success: true, data: await handleReply(body) });
         } finally {
           active -= 1;
         }

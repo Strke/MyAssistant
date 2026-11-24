@@ -2,7 +2,13 @@
 
 这条链路监听 B 机当前钉钉账号可见的群/单聊消息，把消息送到 A 机做 RAG 检索和模型判断，并把原始消息 + 判断结果写到 B 机的 JSONL 文件。
 
-当前版本**只记录，不自动回复、不写黑板、不发送 DM**。
+在判断为相关时，会：
+
+- 更新 A 机的黑板
+- 将整块黑板推送到 B 的「黑板推送」群
+- 在 MonkeyScan Review引擎 群和单聊中自动回复原消息
+
+黑板只保留未完成事项；已完成事项只保留最新 5 项。
 
 ## 流程
 
@@ -13,6 +19,7 @@ B 机
         ▼
   dws-watch
     - 按 messageId 去重
+    - 跳过 AI 标记消息和配置的机器人发送者（默认邮箱助手等）
     - POST A /v1/dingtalk/review
         │ Tailscale HTTPS + Bearer token
         ▼
@@ -21,7 +28,8 @@ A 机
     1. 消息写入 RAG
     2. bge-m3 检索相关历史
     3. deepseek-v4.1-flash 输出结构化判断
-    4. 返回 decision
+    4. 更新黑板、推送黑板群、自动回复
+    5. 返回 decision + actions
         │
         ▼
 B 机
@@ -83,6 +91,11 @@ REVIEW_TOKEN=随机长字符串
 REVIEW_TOP_K=8
 REVIEW_MAX_CONTENT_CHARS=8000
 REVIEW_TIMEOUT_SECONDS=90
+REVIEW_AUTO_REPLY=true
+BLACKBOARD_ENABLED=true
+BLACKBOARD_PATH=./data/blackboard.json
+BLACKBOARD_GROUP_ID=cidx7ygN7Xd06+ARqXKam58gA==
+BLACKBOARD_MAX_COMPLETED=5
 ```
 
 通过 Tailscale Serve 暴露给 tailnet：
@@ -96,6 +109,31 @@ tailscale serve --bg 8788
 ```bash
 curl http://127.0.0.1:8788/health
 ```
+
+## 自动回复范围
+
+B 的 gateway 只允许：
+
+```bash
+DWS_REPLY_GROUPS=cid6WlrFjAj3jSSMMczR+XEXQ==
+DWS_REPLY_DMS=all
+```
+
+因此自动回复只会在 MonkeyScan Review引擎 群和单聊中发生。回复使用 DWS 当前登录用户身份，默认带 AI 角标。
+
+跨组织单聊在 DWS 中可能缺少跨组织数据授权，回复会失败并记录在 `actions.reply.error`。如确需回复跨组织会话，需要在 B 上按提示执行：
+
+```bash
+dws chat data-auth cross-org --all --grant-type timed --ttl 24h --format json
+```
+
+## 黑板
+
+- 未完成事项全部保留
+- 已完成事项只保留最新 5 项
+- 黑板文件：A 机 `data/blackboard.json`
+- 黑板群：`cidx7ygN7Xd06+ARqXKam58gA==`（「黑板推送」）
+- 只有黑板发生变化时才推送到群，避免刷屏
 
 ## 审阅文件
 
@@ -125,6 +163,11 @@ curl http://127.0.0.1:8788/health
       "details": "..."
     }
   },
+  "actions": {
+    "blackboard": { "action": "add", "changed": true, "taskId": "bb_..." },
+    "pushed": true,
+    "reply": { "sent": true, "text": "收到，我先记到黑板上了。" }
+  },
   "duplicate": false,
   "durationMs": 6400
 }
@@ -146,11 +189,11 @@ A 处理失败时也会写一条记录，带 `error` 字段，方便排查。
 
 ## 当前边界
 
-- 只读：不自动回复、不写黑板、不发 DM
 - 群聊只监听显式配置的 `DWS_WATCH_GROUPS`
-- 单聊默认不监听；需要显式设置 `DWS_WATCH_DMS=all`
+- 单聊由 `DWS_WATCH_DMS=all` 开启
 - 消息会进入 A 的 RAG，模型判断基于检索到的历史
 - `related`/`alreadyDone` 是模型判断，不是绝对事实；不确定时应以 `alreadyDone=false` 处理
+- 默认跳过 `DWS_WATCH_IGNORE_SENDERS` 中的机器人发送者（邮箱助手、钉钉助手、钉钉小秘书）
 - 订阅进程断线会自动重启
 
 ## 黑板推送群

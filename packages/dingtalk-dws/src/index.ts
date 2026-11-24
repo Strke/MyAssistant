@@ -10,4 +10,7 @@ export type {
   DwsMessage,
   DwsMessagePage,
   ListMessagesInput,
+  ReplyMessageInput,
+  ReplyMessageResult,
+  SendMessageResult,
 } from "./types";

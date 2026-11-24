@@ -111,6 +111,11 @@ export const appConfigSchema = z.object({
     topK: z.coerce.number().int().positive().max(50).default(8),
     maxContentChars: z.coerce.number().int().positive().default(8_000),
     timeoutSeconds: z.coerce.number().int().positive().default(90),
+    autoReply: envBoolean.default(false),
+    blackboardEnabled: envBoolean.default(false),
+    blackboardPath: z.string().min(1).default("./data/blackboard.json"),
+    blackboardGroupId: optionalString,
+    maxCompleted: z.coerce.number().int().positive().default(5),
   }),
   tasks: z
     .object({
@@ -212,6 +217,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       topK: clean(env.REVIEW_TOP_K),
       maxContentChars: clean(env.REVIEW_MAX_CONTENT_CHARS),
       timeoutSeconds: clean(env.REVIEW_TIMEOUT_SECONDS),
+      autoReply: clean(env.REVIEW_AUTO_REPLY),
+      blackboardEnabled: clean(env.BLACKBOARD_ENABLED),
+      blackboardPath: clean(env.BLACKBOARD_PATH),
+      blackboardGroupId: clean(env.BLACKBOARD_GROUP_ID),
+      maxCompleted: clean(env.BLACKBOARD_MAX_COMPLETED),
     },
     tasks: {
       enabled: clean(env.TASKS_ENABLED),

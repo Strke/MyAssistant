@@ -6,7 +6,9 @@ import {
   type ReviewDecision,
   type ReviewEngine,
 } from "@myassistant/core";
+import { createDwsGatewayClient } from "@myassistant/dingtalk-dws";
 import type { ChatMessageRecord, MemoryHit, RagStore } from "@myassistant/rag";
+import { BlackboardStore } from "./blackboard";
 
 const MAX_BODY_BYTES = 128 * 1024;
 
@@ -34,9 +36,24 @@ interface ReviewEvent {
   source?: string;
 }
 
+interface ReviewActions {
+  blackboard?: {
+    action: ReviewDecision["blackboardAction"];
+    changed: boolean;
+    taskId?: string;
+  };
+  pushed?: boolean;
+  reply?: {
+    sent: boolean;
+    text?: string;
+    error?: string;
+  };
+}
+
 interface ReviewResponse {
   duplicate: boolean;
   decision?: ReviewDecision;
+  actions?: ReviewActions;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -123,6 +140,18 @@ export async function createReviewServer(options: ReviewServerOptions): Promise<
     throw new Error("REVIEW_TOKEN is required when the review server is enabled.");
   }
   const engine: ReviewEngine = await createReviewEngine(config, { logger });
+  const blackboard = config.review.blackboardEnabled
+    ? new BlackboardStore(config.review.blackboardPath, config.review.maxCompleted)
+    : undefined;
+  await blackboard?.init();
+  const gateway =
+    config.review.autoReply || config.review.blackboardEnabled
+      ? createDwsGatewayClient({
+          baseUrl: config.dws.gatewayUrl,
+          token: config.dws.gatewayToken,
+          timeoutMs: config.dws.requestTimeoutSeconds * 1_000,
+        })
+      : undefined;
 
   const handleEvent = async (event: ReviewEvent): Promise<ReviewResponse> => {
     if (store.hasMessage?.("dingtalk", event.messageId)) {
@@ -149,6 +178,13 @@ export async function createReviewServer(options: ReviewServerOptions): Promise<
       logger?.warn({ err: error }, "review retrieval failed; continuing without memory");
     }
     const relatedHits = hits.filter((hit) => hit.messageId !== record.id);
+    const blackboardItems = blackboard
+      ? blackboard.list().map((item) => ({
+          id: item.id,
+          title: item.title,
+          status: item.status,
+        }))
+      : undefined;
 
     const decision = await engine.judge({
       message: {
@@ -163,7 +199,67 @@ export async function createReviewServer(options: ReviewServerOptions): Promise<
         createdAt: hit.createdAt,
         conversationId: hit.conversationId,
       })),
+      blackboardItems,
     });
+
+    const actions: ReviewActions = {};
+    if (blackboard && decision.related) {
+      if (decision.blackboardAction === "add" && decision.blackboardItem) {
+        const added = await blackboard.add({
+          title: decision.blackboardItem.title,
+          details: decision.blackboardItem.details,
+          sourceMessageId: event.messageId,
+          sourceConversationId: event.conversationId,
+        });
+        actions.blackboard = {
+          action: "add",
+          changed: added.changed,
+          taskId: added.item.id,
+        };
+      } else if (decision.blackboardAction === "complete" && decision.completedTaskId) {
+        const completed = await blackboard.complete(decision.completedTaskId);
+        actions.blackboard = {
+          action: "complete",
+          changed: Boolean(completed),
+          taskId: completed?.item.id,
+        };
+      } else {
+        actions.blackboard = { action: "none", changed: false };
+      }
+
+      if (actions.blackboard.changed && config.review.blackboardGroupId && gateway) {
+        try {
+          await gateway.sendGroupMessage(config.review.blackboardGroupId, blackboard.render());
+          actions.pushed = true;
+        } catch (error) {
+          logger?.error({ err: error }, "blackboard push failed");
+        }
+      }
+    }
+
+    if (config.review.autoReply && decision.related && gateway) {
+      const defaultReply =
+        decision.blackboardAction === "add"
+          ? "收到，我先记到黑板上了。"
+          : decision.alreadyDone
+            ? "收到，这件事之前已经完成了。"
+            : "收到，我确认一下。";
+      const replyText = decision.suggestedReply?.trim() || defaultReply;
+      try {
+        await gateway.replyMessage({
+          conversationId: event.conversationId,
+          messageId: event.messageId,
+          chatType: event.chatType === "direct" ? "direct" : "group",
+          senderOpenDingTalkId: event.senderOpenDingTalkId,
+          text: replyText,
+        });
+        actions.reply = { sent: true, text: replyText };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        actions.reply = { sent: false, text: replyText, error: message };
+        logger?.error({ err: error }, "auto reply failed");
+      }
+    }
 
     logger?.info(
       {
@@ -173,10 +269,13 @@ export async function createReviewServer(options: ReviewServerOptions): Promise<
         related: decision.related,
         alreadyDone: decision.alreadyDone,
         confidence: decision.confidence,
+        blackboardAction: decision.blackboardAction,
+        blackboardPushed: actions.pushed,
+        replied: actions.reply?.sent,
       },
       "review decision",
     );
-    return { duplicate: false, decision };
+    return { duplicate: false, decision, actions };
   };
 
   let server: Server | undefined;

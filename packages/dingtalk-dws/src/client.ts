@@ -1,4 +1,13 @@
-import type { DwsAuthStatus, DwsChat, DwsHealth, DwsMessagePage, ListMessagesInput } from "./types";
+import type {
+  DwsAuthStatus,
+  DwsChat,
+  DwsHealth,
+  DwsMessagePage,
+  ListMessagesInput,
+  ReplyMessageInput,
+  ReplyMessageResult,
+  SendMessageResult,
+} from "./types";
 
 export interface DwsGatewayClientOptions {
   baseUrl: string;
@@ -61,6 +70,14 @@ export class DwsGatewayClient {
 
   async listMessages(input: ListMessagesInput): Promise<DwsMessagePage> {
     return this.post<DwsMessagePage>("/v1/chat/messages", input);
+  }
+
+  async sendGroupMessage(groupId: string, text: string): Promise<SendMessageResult> {
+    return this.post<SendMessageResult>("/v1/chat/send", { groupId, text });
+  }
+
+  async replyMessage(input: ReplyMessageInput): Promise<ReplyMessageResult> {
+    return this.post<ReplyMessageResult>("/v1/chat/reply", input);
   }
 
   private async get<T>(path: string, timeoutMs = this.timeoutMs): Promise<T> {

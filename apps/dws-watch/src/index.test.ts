@@ -49,6 +49,19 @@ describe("extractEvent", () => {
     });
   });
 
+  it("detects AI-sent messages for loop prevention", () => {
+    const event = extractEvent(
+      {
+        message_id: "msg-ai",
+        conversation_id: "cid",
+        content: "assistant reply",
+        message_ai_send_flag: true,
+      },
+      "group:cid",
+    );
+    expect(event?.aiSend).toBe(true);
+  });
+
   it("rejects events without message id or content", () => {
     expect(extractEvent({ message_id: "msg-1", content: "x" }, "group:cid")).toBeUndefined();
     expect(
@@ -72,9 +85,11 @@ describe("loadWatchConfig", () => {
       DWS_WATCH_GROUPS: "cid-1,cid-2",
       DWS_WATCH_DMS: "all",
       DWS_WATCH_LOG: "/tmp/reviews.jsonl",
+      DWS_WATCH_IGNORE_SENDERS: "邮箱助手, 钉钉助手",
     });
     expect(config.groups).toEqual(["cid-1", "cid-2"]);
     expect(config.watchAllDirect).toBe(true);
+    expect([...config.ignoreSenders]).toEqual(["邮箱助手", "钉钉助手"]);
     expect(config.reviewUrl).toBe("https://a.example");
     expect(config.logPath).toBe("/tmp/reviews.jsonl");
   });
