@@ -71,10 +71,27 @@ export const appConfigSchema = z.object({
     keychainAccount: z.string().min(1).default("default"),
     autoLockMinutes: z.coerce.number().int().positive().default(15),
   }),
-  tasks: z.object({
-    enabled: envBoolean.default(true),
-    backend: z.enum(["local", "pi-subagent", "pi-rpc", "http-a2a"]).default("local"),
-  }),
+  tasks: z
+    .object({
+      enabled: envBoolean.default(true),
+      backend: z.enum(["local", "pi-subagent", "pi-rpc", "http-a2a"]).default("local"),
+      path: z.string().min(1).default("./data/tasks.json"),
+      sessionDir: z.string().min(1).default("./data/task-sessions"),
+      concurrency: z.coerce.number().int().positive().max(16).default(2),
+      timeoutMinutes: z.coerce.number().int().positive().default(30),
+      maxRecords: z.coerce.number().int().positive().default(500),
+      httpUrl: optionalString,
+      piRpcCli: optionalString,
+    })
+    .superRefine((value, ctx) => {
+      if (value.backend === "http-a2a" && !value.httpUrl) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["httpUrl"],
+          message: "TASKS_HTTP_URL is required when TASKS_BACKEND=http-a2a",
+        });
+      }
+    }),
 });
 
 export type AppConfig = z.infer<typeof appConfigSchema>;
@@ -127,6 +144,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     tasks: {
       enabled: clean(env.TASKS_ENABLED),
       backend: clean(env.TASKS_BACKEND),
+      path: clean(env.TASKS_PATH),
+      sessionDir: clean(env.TASKS_SESSION_DIR),
+      concurrency: clean(env.TASKS_CONCURRENCY),
+      timeoutMinutes: clean(env.TASKS_TIMEOUT_MINUTES),
+      maxRecords: clean(env.TASKS_MAX_RECORDS),
+      httpUrl: clean(env.TASKS_HTTP_URL),
+      piRpcCli: clean(env.TASKS_PI_RPC_CLI),
     },
   };
 

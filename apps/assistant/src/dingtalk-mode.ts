@@ -1,11 +1,14 @@
 import { createDingTalkChannel } from "@myassistant/channel-dingtalk";
 import type { AppConfig } from "@myassistant/config";
 import type { ConversationRecord, ToolDefinition } from "@myassistant/core";
+import { createTaskTools, type TaskManager } from "@myassistant/tasks";
 import { createDingTalkRunner } from "./dingtalk-runner";
+import { formatTaskNotification } from "./task-notifications";
 
 export interface DingTalkModeOptions {
   config: AppConfig;
   customTools: ToolDefinition[];
+  taskManager?: TaskManager;
   onMessage?: (record: ConversationRecord) => Promise<void>;
 }
 
@@ -24,10 +27,34 @@ export async function runDingTalkMode(options: DingTalkModeOptions): Promise<voi
       process.stderr.write(`[dingtalk] ${error.message}\n`);
     },
   });
+
+  const taskManager = options.taskManager;
+  const unsubscribeTask = taskManager?.onUpdate(({ task, previousStatus }) => {
+    if (task.notify?.channel !== "dingtalk") {
+      return;
+    }
+    if (task.status === previousStatus) {
+      return;
+    }
+    const text = formatTaskNotification(task);
+    if (!text) {
+      return;
+    }
+    void channel
+      .send({ conversationId: task.notify.conversationId, text })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        process.stderr.write(`[dingtalk] failed to push task notification: ${message}\n`);
+      });
+  });
+
   const runner = createDingTalkRunner({
     config,
     channel,
-    customTools: options.customTools,
+    customTools: (conversationId) => [
+      ...options.customTools,
+      ...(taskManager ? createTaskTools(taskManager, { channel: "dingtalk", conversationId }) : []),
+    ],
     onMessage: options.onMessage,
   });
 
@@ -49,5 +76,6 @@ export async function runDingTalkMode(options: DingTalkModeOptions): Promise<voi
     process.off("SIGINT", onSignal);
     process.off("SIGTERM", onSignal);
     await runner.stop();
+    unsubscribeTask?.();
   }
 }

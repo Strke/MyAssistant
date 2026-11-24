@@ -122,7 +122,8 @@ export async function runRepl(config: AppConfig, options: ReplOptions = {}): Pro
     });
   };
 
-  const createSession = () => createAssistantSession({ config, customTools: options.customTools });
+  const createSession = (newSession = false) =>
+    createAssistantSession({ config, customTools: options.customTools, newSession });
 
   let current = await createSession();
   let unsubscribe = attachStream(current.session, channel, options.onMessage, enqueue);
@@ -155,7 +156,7 @@ export async function runRepl(config: AppConfig, options: ReplOptions = {}): Pro
       if (input === "/new") {
         unsubscribe();
         current.session.dispose();
-        current = await createSession();
+        current = await createSession(true);
         unsubscribe = attachStream(current.session, channel, options.onMessage, enqueue);
         stdout.write(`[assistant] new session ${current.session.sessionId}\n`);
         continue;

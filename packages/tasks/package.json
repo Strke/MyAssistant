@@ -7,5 +7,9 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "^1.6.0",
+    "@earendil-works/pi-schema": "^1.6.0"
   }
 }

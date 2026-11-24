@@ -21,9 +21,18 @@ export interface CreateAssistantSessionOptions {
   config: AppConfig;
   customTools?: ToolDefinition[];
   sessionDir?: string;
+  /** Start a fresh session instead of continuing the most recent one. */
+  newSession?: boolean;
+  /** Replace the configured system prompt, for example for a task sub-agent. */
+  systemPrompt?: string;
+  /** Tool names to disable for this session. */
+  excludeTools?: string[];
 }
 
-async function loadSystemPrompt(config: AppConfig): Promise<string> {
+async function loadSystemPrompt(config: AppConfig, override?: string): Promise<string> {
+  if (override) {
+    return override;
+  }
   const file = config.agent.systemPromptFile;
   if (!file) {
     return DEFAULT_ASSISTANT_SYSTEM_PROMPT;
@@ -59,7 +68,7 @@ export async function createAssistantSession(
     );
   }
 
-  const systemPrompt = await loadSystemPrompt(config);
+  const systemPrompt = await loadSystemPrompt(config, options.systemPrompt);
   const resourceLoader = new DefaultResourceLoader({
     cwd,
     agentDir: getAgentDir(),
@@ -68,14 +77,19 @@ export async function createAssistantSession(
   });
   await resourceLoader.reload();
 
+  const sessionManager = options.newSession
+    ? SessionManager.create(cwd, options.sessionDir)
+    : SessionManager.continueRecent(cwd, options.sessionDir);
+
   const { session, modelFallbackMessage } = await createAgentSession({
     cwd,
     model,
     modelRuntime,
     thinkingLevel: config.model.thinkingLevel,
     resourceLoader,
-    sessionManager: SessionManager.continueRecent(cwd, options.sessionDir),
+    sessionManager,
     customTools: options.customTools,
+    excludeTools: options.excludeTools,
   });
 
   if (modelFallbackMessage) {

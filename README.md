@@ -24,7 +24,7 @@ cp .env.example .env
 npm run dev
 ```
 
-`npm run dev` 默认启动 REPL（当前为 M1–M4）。首次使用需要配置模型凭证：填入 `.env` 的 `MODEL_API_KEY`，或在本机运行过一次 `pi` 并用 `/login` 登录。
+`npm run dev` 默认启动 REPL（当前为 M1–M5）。首次使用需要配置模型凭证：填入 `.env` 的 `MODEL_API_KEY`，或在本机运行过一次 `pi` 并用 `/login` 登录。
 
 REPL 内置命令：`/help`、`/status`、`/new`、`/exit`。会话会自动持久化。
 
@@ -53,6 +53,24 @@ npm run vault -- rm github_token
 ```
 
 Agent 可通过 `vault_get` / `vault_list` 工具访问密钥。CI 或非 macOS 环境可设置 `VAULT_MASTER_KEY`（base64 的 32 字节）或 `VAULT_PASSPHRASE`。
+
+### 任务外派
+
+Agent 可把耗时或独立任务交给后台 agent，使用内置工具：
+
+- `delegate_task(description, target?)`：立即返回任务 id
+- `check_task(taskId)`：查看状态和结果
+- `cancel_task(taskId)`：取消排队或运行中的任务
+- `list_tasks(status?)`：列出最近任务
+
+任务会持久化到 `data/tasks.json`，重启后未完成的任务会标记为失败，避免静默丢失。默认后端 `local` 会在独立的 pi 子 session 中执行任务；也支持：
+
+```bash
+TASKS_BACKEND=pi-rpc           # 独立的 pi RPC 子进程，TASKS_PI_RPC_CLI 可覆盖 CLI 路径
+TASKS_BACKEND=http-a2a         # 转发到 TASKS_HTTP_URL，POST 创建、GET 轮询、DELETE 取消
+```
+
+其他配置：`TASKS_CONCURRENCY`（默认 2）、`TASKS_TIMEOUT_MINUTES`（默认 30）、`TASKS_MAX_RECORDS`（默认 500）。钉钉会话通过 `delegate_task` 创建的任务完成后，会主动推送结果到原会话。
 
 ## 常用脚本
 
@@ -86,7 +104,7 @@ docs/PLAN.md             # 架构与里程碑
 - [x] M2 RAG
 - [x] M3 Vault
 - [x] M4 钉钉
-- [ ] M5 任务外派
+- [x] M5 任务外派
 - [ ] M6 加固
 
 ## 安全

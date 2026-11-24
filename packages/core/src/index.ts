@@ -6,3 +6,5 @@ export type { AssistantRuntime, RuntimeSummary } from "./runtime";
 export { describeRuntime } from "./runtime";
 export type { AssistantSession, CreateAssistantSessionOptions } from "./session";
 export { createAssistantSession } from "./session";
+export type { PiSubagentExecutorOptions } from "./task-executor";
+export { createPiSubagentExecutor, DEFAULT_TASK_SYSTEM_PROMPT } from "./task-executor";

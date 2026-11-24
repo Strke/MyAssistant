@@ -110,5 +110,5 @@ packages/
 - [x] M2 RAG（SQLite + sqlite-vec + FTS5、写入管线、混合检索、memory_search 工具）
 - [x] M3 Vault（AES-256-GCM 加密存储、Keychain/Env/Passphrase 主密钥、自动锁定、审计、vault 工具与 CLI）
 - [x] M4 钉钉（Stream Mode 入站、去重、每会话独立 session、sessionWebhook 出站回复）
-- [ ] M5 任务外派
+- [x] M5 任务外派（任务持久化、并发/超时/取消、local / pi-rpc / http-a2a 后端、delegate/check/cancel/list 工具、钉钉完成推送）
 - [ ] M6 加固

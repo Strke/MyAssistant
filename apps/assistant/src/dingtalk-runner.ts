@@ -12,7 +12,7 @@ import {
 export interface DingTalkRunnerOptions {
   config: AppConfig;
   channel: ChatChannel;
-  customTools: ToolDefinition[];
+  customTools: ToolDefinition[] | ((conversationId: string) => ToolDefinition[]);
   onMessage?: (record: ConversationRecord) => Promise<void>;
 }
 
@@ -50,9 +50,13 @@ export function createDingTalkRunner(options: DingTalkRunnerOptions): DingTalkRu
     if (existing) {
       return existing;
     }
+    const tools =
+      typeof options.customTools === "function"
+        ? options.customTools(conversationId)
+        : options.customTools;
     const { session } = await createAssistantSession({
       config: options.config,
-      customTools: options.customTools,
+      customTools: tools,
       sessionDir: join(sessionRoot, conversationDirName(conversationId)),
     });
     sessions.set(conversationId, session);

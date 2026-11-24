@@ -12,6 +12,7 @@
     "@myassistant/config": "*",
     "@myassistant/core": "*",
     "@myassistant/rag": "*",
-    "@myassistant/vault": "*"
+    "@myassistant/vault": "*",
+    "@myassistant/tasks": "*"
   }
 }

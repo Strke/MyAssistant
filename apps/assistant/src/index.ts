@@ -6,8 +6,10 @@ import {
   createMemorySearchTool,
   openRagStore,
 } from "@myassistant/rag";
+import { createTaskTools, type TaskManager } from "@myassistant/tasks";
 import { createVaultTools, type Vault } from "@myassistant/vault";
 import { runDingTalkMode } from "./dingtalk-mode";
+import { openTaskManager } from "./task-runtime";
 import { openVault } from "./vault-runtime";
 
 const config = loadConfigFromEnvFile();
@@ -44,15 +46,40 @@ try {
 
 const activeVault = vault;
 
+let taskManager: TaskManager | undefined;
+try {
+  taskManager = await openTaskManager(config, {
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      process.stderr.write(`[tasks] ${message}\n`);
+    },
+  });
+  if (taskManager) {
+    process.stdout.write(
+      `[assistant] tasks: ${config.tasks.backend} (${config.tasks.path}, concurrency ${config.tasks.concurrency})\n`,
+    );
+  }
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  process.stderr.write(`[assistant] tasks disabled: ${message}\n`);
+}
+
+const activeTaskManager = taskManager;
+
 const onMessage = ragStore ? (record: ChatMessageRecord) => ragStore.addMessage(record) : undefined;
 
 try {
   if (config.dingtalk.enabled) {
-    await runDingTalkMode({ config, customTools, onMessage });
+    await runDingTalkMode({ config, customTools, taskManager: activeTaskManager, onMessage });
   } else {
-    await runRepl(config, { customTools, onMessage });
+    const localTools = [
+      ...customTools,
+      ...(activeTaskManager ? createTaskTools(activeTaskManager) : []),
+    ];
+    await runRepl(config, { customTools: localTools, onMessage });
   }
 } finally {
+  await activeTaskManager?.close();
   await ragStore?.close();
   await activeVault?.close();
 }
