@@ -29,6 +29,59 @@ npm run dev
 
 REPL 内置命令：`/help`、`/status`、`/new`、`/exit`。会话会自动持久化。
 
+### 模型账号接入
+
+assistant 复用 pi 的模型运行时，支持三种接法，按自己的账号类型选一种即可。
+
+#### 1. 订阅账号（Claude Pro/Max、ChatGPT Plus/Pro、Copilot 等）
+
+不写 API Key，直接登录自己的订阅账号：
+
+```bash
+npm run login
+```
+
+在打开的 Pi 界面里输入 `/login`，选择 provider（例如 `Anthropic (Claude Pro/Max)` 或 `OpenAI (ChatGPT Plus/Pro)`），按提示在浏览器完成授权，然后 `/exit` 退出。
+
+凭证由 pi 保存在 `~/.pi/agent/auth.json`，assistant 启动时会自动读取。支持哪些订阅以当前 pi 版本为准，已包含 Anthropic、OpenAI ChatGPT、GitHub Copilot、Kimi Code、xAI 等 OAuth 流程。
+
+登录后先检查：
+
+```bash
+npm run model:check
+```
+
+它会列出当前可用的 provider/模型，并告诉你 `.env` 里配置的模型是否可用。订阅登录时注意：
+
+- 不要同时设置 `MODEL_API_KEY`，运行时 Key 的优先级高于已保存的订阅凭证。
+- 默认配置是 `anthropic/claude-sonnet-4-6`。如果登录的是 ChatGPT 或其它 provider，需要在 `.env` 改 `MODEL_PROVIDER` / `MODEL_ID`，具体值以 `model:check` 或 Pi 里的 `/model` 为准。
+- 同一个 provider 同时只保存一份账号凭证；切换账号重新 `/login` 即可。
+
+#### 2. 自己的 API Key
+
+在 `.env` 里配置：
+
+```bash
+MODEL_PROVIDER=anthropic        # 或 openai / deepseek / google / moonshotai / openrouter ...
+MODEL_ID=claude-sonnet-4-6
+MODEL_API_KEY=sk-...
+```
+
+然后运行 `npm run model:check`，确认 `✅ configured model is available`。不同厂商的 Key 也可以放在对应环境变量里（如 `ANTHROPIC_API_KEY`、`OPENAI_API_KEY`），不一定要写 `MODEL_API_KEY`。
+
+#### 3. 本地或自建 OpenAI 兼容端点
+
+在 `~/.pi/agent/models.json` 里配置 Ollama、LM Studio、vLLM 或自己的代理端点，然后设置：
+
+```bash
+MODEL_PROVIDER=ollama
+MODEL_ID=qwen2.5-coder:7b
+```
+
+具体格式参考 pi 的 `models.json` 文档。配置好后同样用 `npm run model:check` 验证。
+
+> `MODEL_API_KEY` 会进入 `.env`，该文件已被 git 忽略；如果你更希望把模型 Key 放进本地 Vault，可以告诉我，我再把 Vault 读取接进模型初始化流程。
+
 ### 钉钉（Stream Mode）
 
 在钉钉开放平台创建企业内部应用并添加 Stream 模式机器人：
@@ -136,6 +189,8 @@ launchd 会在崩溃后自动重启，日志写入 `data/logs/`。运行 `daemon
 | `npm run daemon`         | 前台启动常驻 daemon         |
 | `npm run assistant`      | 本地 CLI 控制 daemon        |
 | `npm run dingtalk:check` | 验证钉钉凭证与 Stream 连接  |
+| `npm run login`          | 登录订阅账号或保存模型凭证  |
+| `npm run model:check`    | 查看当前可用的模型与账号    |
 | `npm run daemon:install` | 安装 launchd 自启项         |
 | `npm run daemon:status`  | 查看 launchd 状态           |
 | `npm run build`          | 构建生产产物到 `dist/`      |

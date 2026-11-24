@@ -7,6 +7,7 @@ export default defineConfig({
     client: "apps/assistant/src/client.ts",
     launchd: "apps/assistant/src/launchd.ts",
     "dingtalk-check": "apps/assistant/src/dingtalk-check.ts",
+    "model-check": "apps/assistant/src/model-check.ts",
   },
   outDir: "dist",
   format: ["esm"],
