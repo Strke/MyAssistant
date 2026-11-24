@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@myassistant/config": "*",
-    "@myassistant/core": "*"
+    "@myassistant/core": "*",
+    "@myassistant/rag": "*"
   }
 }

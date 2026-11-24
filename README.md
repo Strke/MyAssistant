@@ -24,9 +24,11 @@ cp .env.example .env
 npm run dev
 ```
 
-`npm run dev` 会启动 REPL（当前为 M1 核心对话）。首次使用需要配置模型凭证：填入 `.env` 的 `MODEL_API_KEY`，或在本机运行过一次 `pi` 并用 `/login` 登录。
+`npm run dev` 会启动 REPL（当前为 M1 核心对话 + M2 RAG）。首次使用需要配置模型凭证：填入 `.env` 的 `MODEL_API_KEY`，或在本机运行过一次 `pi` 并用 `/login` 登录。
 
 REPL 内置命令：`/help`、`/status`、`/new`、`/exit`。会话会自动持久化。
+
+RAG 会记录每轮对话并提供 `memory_search` 工具。默认使用 OpenAI 兼容的 embedding 接口，需配置 `RAG_EMBEDDING_API_KEY`（可选 `RAG_EMBEDDING_BASE_URL`）；本地调试可设 `RAG_EMBEDDING_PROVIDER=hash`。未配置凭证时 RAG 会自动跳过。
 
 ## 常用脚本
 
@@ -56,7 +58,7 @@ docs/PLAN.md             # 架构与里程碑
 
 - [x] M0 脚手架
 - [x] M1 核心对话
-- [ ] M2 RAG
+- [x] M2 RAG
 - [ ] M3 Vault
 - [ ] M4 钉钉
 - [ ] M5 任务外派

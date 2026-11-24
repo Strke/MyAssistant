@@ -1,8 +1,24 @@
 import { stdin, stdout } from "node:process";
 import { createInterface } from "node:readline/promises";
-import type { AgentSession } from "@earendil-works/pi-coding-agent";
+import type { AgentSession, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { AppConfig } from "@myassistant/config";
 import { createAssistantSession } from "./session";
+
+export interface ConversationRecord {
+  id: string;
+  conversationId: string;
+  role: "user" | "assistant";
+  channel: string;
+  sender?: string;
+  content: string;
+  createdAt: number;
+}
+
+export interface ReplOptions {
+  customTools?: ToolDefinition[];
+  onMessage?: (record: ConversationRecord) => Promise<void>;
+  channel?: string;
+}
 
 const HELP_TEXT = `Commands:
   /help     Show this help
@@ -10,7 +26,64 @@ const HELP_TEXT = `Commands:
   /new      Start a new session
   /exit     Quit`;
 
-function attachStream(session: AgentSession): () => void {
+function extractText(content: unknown): string {
+  if (typeof content === "string") {
+    return content;
+  }
+  if (!Array.isArray(content)) {
+    return "";
+  }
+
+  const parts: string[] = [];
+  for (const block of content) {
+    if (!block || typeof block !== "object") {
+      continue;
+    }
+    const candidate = block as { type?: unknown; text?: unknown };
+    if (candidate.type === "text" && typeof candidate.text === "string") {
+      parts.push(candidate.text);
+    }
+  }
+  return parts.join("\n");
+}
+
+function toRecord(
+  sessionId: string,
+  message: unknown,
+  channel: string,
+): ConversationRecord | undefined {
+  if (!message || typeof message !== "object") {
+    return undefined;
+  }
+
+  const candidate = message as { role?: unknown; content?: unknown; timestamp?: unknown };
+  if (candidate.role !== "user" && candidate.role !== "assistant") {
+    return undefined;
+  }
+
+  const content = extractText(candidate.content);
+  if (!content.trim()) {
+    return undefined;
+  }
+
+  const createdAt = typeof candidate.timestamp === "number" ? candidate.timestamp : Date.now();
+  return {
+    id: `${sessionId}:${candidate.role}:${createdAt}`,
+    conversationId: sessionId,
+    role: candidate.role,
+    channel,
+    sender: candidate.role,
+    content,
+    createdAt,
+  };
+}
+
+function attachStream(
+  session: AgentSession,
+  channel: string,
+  onMessage: ((record: ConversationRecord) => Promise<void>) | undefined,
+  enqueue: (task: () => Promise<void>) => void,
+): () => void {
   return session.subscribe((event) => {
     if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
       stdout.write(event.assistantMessageEvent.delta);
@@ -18,8 +91,16 @@ function attachStream(session: AgentSession): () => void {
     if (event.type === "tool_execution_start") {
       stdout.write(`\n[tool] ${event.toolName}\n`);
     }
-    if (event.type === "message_end" && event.message.role === "assistant") {
-      stdout.write("\n");
+    if (event.type === "message_end") {
+      if (event.message.role === "assistant") {
+        stdout.write("\n");
+      }
+      if (onMessage) {
+        const record = toRecord(session.sessionId, event.message, channel);
+        if (record) {
+          enqueue(() => onMessage(record));
+        }
+      }
     }
   });
 }
@@ -29,10 +110,22 @@ function statusLine(session: AgentSession): string {
   return `session=${session.sessionId} model=${model} messages=${session.messages.length}`;
 }
 
-export async function runRepl(config: AppConfig): Promise<void> {
+export async function runRepl(config: AppConfig, options: ReplOptions = {}): Promise<void> {
+  const channel = options.channel ?? "local";
   const rl = createInterface({ input: stdin, output: stdout });
-  let current = await createAssistantSession({ config });
-  let unsubscribe = attachStream(current.session);
+
+  let pending: Promise<void> = Promise.resolve();
+  const enqueue = (task: () => Promise<void>) => {
+    pending = pending.then(task).catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      stdout.write(`\n[rag] failed to persist message: ${message}\n`);
+    });
+  };
+
+  const createSession = () => createAssistantSession({ config, customTools: options.customTools });
+
+  let current = await createSession();
+  let unsubscribe = attachStream(current.session, channel, options.onMessage, enqueue);
 
   stdout.write(`[assistant] ${statusLine(current.session)}\nType /help for commands.\n`);
 
@@ -62,8 +155,8 @@ export async function runRepl(config: AppConfig): Promise<void> {
       if (input === "/new") {
         unsubscribe();
         current.session.dispose();
-        current = await createAssistantSession({ config });
-        unsubscribe = attachStream(current.session);
+        current = await createSession();
+        unsubscribe = attachStream(current.session, channel, options.onMessage, enqueue);
         stdout.write(`[assistant] new session ${current.session.sessionId}\n`);
         continue;
       }
@@ -80,5 +173,6 @@ export async function runRepl(config: AppConfig): Promise<void> {
     unsubscribe();
     current.session.dispose();
     rl.close();
+    await pending;
   }
 }

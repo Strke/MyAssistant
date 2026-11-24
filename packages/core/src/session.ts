@@ -7,6 +7,7 @@ import {
   getAgentDir,
   ModelRuntime,
   SessionManager,
+  type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import type { AppConfig } from "@myassistant/config";
 import { DEFAULT_ASSISTANT_SYSTEM_PROMPT } from "./prompt";
@@ -18,6 +19,7 @@ export interface AssistantSession {
 
 export interface CreateAssistantSessionOptions {
   config: AppConfig;
+  customTools?: ToolDefinition[];
 }
 
 async function loadSystemPrompt(config: AppConfig): Promise<string> {
@@ -72,6 +74,7 @@ export async function createAssistantSession(
     thinkingLevel: config.model.thinkingLevel,
     resourceLoader,
     sessionManager: SessionManager.continueRecent(cwd),
+    customTools: options.customTools,
   });
 
   if (modelFallbackMessage) {

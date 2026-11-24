@@ -107,7 +107,7 @@ packages/
 
 - [x] M0 脚手架（本文件 + workspace + 工具链 + config + 模块骨架）
 - [x] M1 核心对话（pi SDK 会话持久化 + REPL + 流式输出）
-- [ ] M2 RAG
+- [x] M2 RAG（SQLite + sqlite-vec + FTS5、写入管线、混合检索、memory_search 工具）
 - [ ] M3 Vault
 - [ ] M4 钉钉
 - [ ] M5 任务外派

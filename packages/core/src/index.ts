@@ -1,4 +1,6 @@
+export type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 export { DEFAULT_ASSISTANT_SYSTEM_PROMPT } from "./prompt";
+export type { ConversationRecord, ReplOptions } from "./repl";
 export { runRepl } from "./repl";
 export type { AssistantRuntime, RuntimeSummary } from "./runtime";
 export { describeRuntime } from "./runtime";

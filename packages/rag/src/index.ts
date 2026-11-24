@@ -1,30 +1,8 @@
-export interface ChatMessageRecord {
-  id: string;
-  conversationId: string;
-  role: "user" | "assistant" | "system" | "tool";
-  sender?: string;
-  channel: string;
-  externalId?: string;
-  content: string;
-  createdAt: number;
-}
-
-export interface MemoryHit {
-  chunkId: string;
-  messageId: string;
-  content: string;
-  score: number;
-  createdAt: number;
-}
-
-export interface MemorySearchOptions {
-  topK?: number;
-  conversationId?: string;
-  since?: number;
-}
-
-export interface RagStore {
-  addMessage(record: ChatMessageRecord): Promise<void>;
-  search(query: string, options?: MemorySearchOptions): Promise<MemoryHit[]>;
-  close(): Promise<void>;
-}
+export type { ChunkOptions } from "./chunk";
+export { chunkText } from "./chunk";
+export type { Embedder, EmbeddingOptions } from "./embedder";
+export { createEmbedder } from "./embedder";
+export type { OpenRagStoreOptions } from "./store";
+export { openRagStore, SqliteRagStore } from "./store";
+export { createMemorySearchTool } from "./tool";
+export type { ChatMessageRecord, MemoryHit, MemorySearchOptions, RagStore } from "./types";

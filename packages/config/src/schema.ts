@@ -61,6 +61,8 @@ export const appConfigSchema = z.object({
       provider: z.string().min(1).default("openai"),
       model: z.string().min(1).default("text-embedding-3-large"),
       dimensions: z.coerce.number().int().positive().default(3072),
+      apiKey: optionalString,
+      baseUrl: z.string().min(1).default("https://api.openai.com/v1"),
     }),
   }),
   vault: z.object({
@@ -112,6 +114,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         provider: clean(env.RAG_EMBEDDING_PROVIDER),
         model: clean(env.RAG_EMBEDDING_MODEL),
         dimensions: clean(env.RAG_EMBEDDING_DIMENSIONS),
+        apiKey: clean(env.RAG_EMBEDDING_API_KEY),
+        baseUrl: clean(env.RAG_EMBEDDING_BASE_URL),
       },
     },
     vault: {
