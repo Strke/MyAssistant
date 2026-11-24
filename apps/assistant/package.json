@@ -10,6 +10,7 @@
   "dependencies": {
     "@myassistant/config": "*",
     "@myassistant/core": "*",
-    "@myassistant/rag": "*"
+    "@myassistant/rag": "*",
+    "@myassistant/vault": "*"
   }
 }

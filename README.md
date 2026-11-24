@@ -24,17 +24,29 @@ cp .env.example .env
 npm run dev
 ```
 
-`npm run dev` 会启动 REPL（当前为 M1 核心对话 + M2 RAG）。首次使用需要配置模型凭证：填入 `.env` 的 `MODEL_API_KEY`，或在本机运行过一次 `pi` 并用 `/login` 登录。
+`npm run dev` 会启动 REPL（当前为 M1 核心对话 + M2 RAG + M3 密钥库）。首次使用需要配置模型凭证：填入 `.env` 的 `MODEL_API_KEY`，或在本机运行过一次 `pi` 并用 `/login` 登录。
 
 REPL 内置命令：`/help`、`/status`、`/new`、`/exit`。会话会自动持久化。
 
 RAG 会记录每轮对话并提供 `memory_search` 工具。默认使用 OpenAI 兼容的 embedding 接口，需配置 `RAG_EMBEDDING_API_KEY`（可选 `RAG_EMBEDDING_BASE_URL`）；本地调试可设 `RAG_EMBEDDING_PROVIDER=hash`。未配置凭证时 RAG 会自动跳过。
+
+密钥库使用本地加密文件（AES-256-GCM，条目级 nonce + AAD），主密钥默认保存在 macOS Keychain，访问会写入审计日志（不记录值）。可用命令管理：
+
+```bash
+npm run vault -- set github_token --description "GitHub token"
+npm run vault -- list
+npm run vault -- get github_token
+npm run vault -- rm github_token
+```
+
+Agent 可通过 `vault_get` / `vault_list` 工具访问密钥。CI 或非 macOS 环境可设置 `VAULT_MASTER_KEY`（base64 的 32 字节）或 `VAULT_PASSPHRASE`。
 
 ## 常用脚本
 
 | 命令                | 说明                |
 | ------------------- | ------------------- |
 | `npm run dev`       | 启动 assistant      |
+| `npm run vault`     | 管理本地密钥库      |
 | `npm run typecheck` | TypeScript 类型检查 |
 | `npm run lint`      | Biome 检查          |
 | `npm run lint:fix`  | Biome 自动修复      |
@@ -59,7 +71,7 @@ docs/PLAN.md             # 架构与里程碑
 - [x] M0 脚手架
 - [x] M1 核心对话
 - [x] M2 RAG
-- [ ] M3 Vault
+- [x] M3 Vault
 - [ ] M4 钉钉
 - [ ] M5 任务外派
 - [ ] M6 加固

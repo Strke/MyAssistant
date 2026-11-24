@@ -1,18 +1,28 @@
-export interface SecretMetadata {
-  name: string;
-  description?: string;
-  createdAt: number;
-  updatedAt: number;
-}
-
-export interface SecretStore {
-  has(name: string): Promise<boolean>;
-  get(name: string): Promise<string | undefined>;
-  set(name: string, value: string, description?: string): Promise<void>;
-  delete(name: string): Promise<boolean>;
-  list(): Promise<SecretMetadata[]>;
-}
-
-export interface SecretResolver {
-  resolvePlaceholders(input: string): Promise<string>;
-}
+export { createJsonlAuditLog } from "./audit";
+export { decryptSecret, encryptSecret } from "./crypto";
+export type {
+  DefaultProviderOptions,
+  KeychainProviderOptions,
+  PassphraseProviderOptions,
+} from "./providers";
+export {
+  createDefaultKeyProvider,
+  createEnvKeyProvider,
+  createKeychainKeyProvider,
+  createPassphraseKeyProvider,
+  createStaticKeyProvider,
+  generateMasterKey,
+  MASTER_KEY_BYTES,
+} from "./providers";
+export { createVaultTools } from "./tool";
+export type {
+  MasterKeyProvider,
+  SecretMetadata,
+  SecretResolver,
+  SecretStore,
+  VaultAction,
+  VaultAuditEvent,
+  VaultAuditSink,
+  VaultOptions,
+} from "./types";
+export { Vault } from "./vault";

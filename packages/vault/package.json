@@ -7,5 +7,10 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@napi-rs/keyring": "^2.1.2",
+    "@noble/ciphers": "^2.4.0",
+    "@noble/hashes": "^2.4.0"
   }
 }
