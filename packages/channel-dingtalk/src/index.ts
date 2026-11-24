@@ -1,24 +1,10 @@
-export interface IncomingChatMessage {
-  messageId: string;
-  conversationId: string;
-  conversationType: "single" | "group";
-  senderId: string;
-  senderName?: string;
-  text: string;
-  createdAt: number;
-}
-
-export interface OutgoingChatMessage {
-  conversationId: string;
-  text: string;
-  format?: "text" | "markdown";
-}
-
-export type ChatMessageHandler = (message: IncomingChatMessage) => Promise<void>;
-
-export interface ChatChannel {
-  start(): Promise<void>;
-  stop(): Promise<void>;
-  send(message: OutgoingChatMessage): Promise<void>;
-  onMessage(handler: ChatMessageHandler): () => void;
-}
+export { createDingTalkChannel, DingTalkChannel } from "./channel";
+export type { RawRobotMessage } from "./parse";
+export { parseRobotMessage } from "./parse";
+export type {
+  ChatChannel,
+  ChatMessageHandler,
+  DingTalkChannelOptions,
+  IncomingChatMessage,
+  OutgoingChatMessage,
+} from "./types";

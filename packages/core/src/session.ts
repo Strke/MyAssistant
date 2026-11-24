@@ -20,6 +20,7 @@ export interface AssistantSession {
 export interface CreateAssistantSessionOptions {
   config: AppConfig;
   customTools?: ToolDefinition[];
+  sessionDir?: string;
 }
 
 async function loadSystemPrompt(config: AppConfig): Promise<string> {
@@ -73,7 +74,7 @@ export async function createAssistantSession(
     modelRuntime,
     thinkingLevel: config.model.thinkingLevel,
     resourceLoader,
-    sessionManager: SessionManager.continueRecent(cwd),
+    sessionManager: SessionManager.continueRecent(cwd, options.sessionDir),
     customTools: options.customTools,
   });
 

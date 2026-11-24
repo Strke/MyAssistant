@@ -24,9 +24,22 @@ cp .env.example .env
 npm run dev
 ```
 
-`npm run dev` 会启动 REPL（当前为 M1 核心对话 + M2 RAG + M3 密钥库）。首次使用需要配置模型凭证：填入 `.env` 的 `MODEL_API_KEY`，或在本机运行过一次 `pi` 并用 `/login` 登录。
+`npm run dev` 默认启动 REPL（当前为 M1–M4）。首次使用需要配置模型凭证：填入 `.env` 的 `MODEL_API_KEY`，或在本机运行过一次 `pi` 并用 `/login` 登录。
 
 REPL 内置命令：`/help`、`/status`、`/new`、`/exit`。会话会自动持久化。
+
+### 钉钉（Stream Mode）
+
+在钉钉开放平台创建企业内部应用并添加 Stream 模式机器人，然后填入 `.env`：
+
+```bash
+DINGTALK_ENABLED=true
+DINGTALK_CLIENT_ID=your-app-key
+DINGTALK_CLIENT_SECRET=your-app-secret
+DINGTALK_ROBOT_CODE=your-robot-code
+```
+
+启用后 `npm run dev` 进入钉钉模式（不再启动 REPL），收到的文本消息会转给 pi 并回复，每个会话使用独立的持久化 session。
 
 RAG 会记录每轮对话并提供 `memory_search` 工具。默认使用 OpenAI 兼容的 embedding 接口，需配置 `RAG_EMBEDDING_API_KEY`（可选 `RAG_EMBEDDING_BASE_URL`）；本地调试可设 `RAG_EMBEDDING_PROVIDER=hash`。未配置凭证时 RAG 会自动跳过。
 
@@ -72,7 +85,7 @@ docs/PLAN.md             # 架构与里程碑
 - [x] M1 核心对话
 - [x] M2 RAG
 - [x] M3 Vault
-- [ ] M4 钉钉
+- [x] M4 钉钉
 - [ ] M5 任务外派
 - [ ] M6 加固
 
