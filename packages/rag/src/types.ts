@@ -27,5 +27,7 @@ export interface MemorySearchOptions {
 export interface RagStore {
   addMessage(record: ChatMessageRecord): Promise<void>;
   search(query: string, options?: MemorySearchOptions): Promise<MemoryHit[]>;
+  /** Optional fast duplicate check by channel/external id. */
+  hasMessage?(channel: string, externalId: string): boolean;
   close(): Promise<void>;
 }

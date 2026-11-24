@@ -8,6 +8,7 @@
       "@myassistant/rag": ["packages/rag/src/index.ts"],
       "@myassistant/vault": ["packages/vault/src/index.ts"],
       "@myassistant/channel-dingtalk": ["packages/channel-dingtalk/src/index.ts"],
+      "@myassistant/dingtalk-dws": ["packages/dingtalk-dws/src/index.ts"],
       "@myassistant/tasks": ["packages/tasks/src/index.ts"]
     }
   },

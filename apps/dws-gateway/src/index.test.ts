@@ -1,0 +1,220 @@
+import type { Server } from "node:http";
+import type { AddressInfo } from "node:net";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  type CommandResult,
+  createGatewayServer,
+  type DwsRunner,
+  type GatewayConfig,
+} from "./index";
+
+const servers: Server[] = [];
+
+const config: GatewayConfig = {
+  host: "127.0.0.1",
+  port: 0,
+  token: "test-token",
+  dwsBin: "dws",
+  allowedGroups: new Set(["cid-good", "cid-partial"]),
+  requestTimeoutMs: 5_000,
+  maxItems: 1_000,
+  maxConcurrent: 2,
+  logRequests: false,
+};
+
+function result(stdout: unknown, code = 0, stderr = ""): CommandResult {
+  return {
+    stdout: typeof stdout === "string" ? stdout : JSON.stringify(stdout),
+    stderr,
+    code,
+    timedOut: false,
+  };
+}
+
+const runner: DwsRunner = async (args) => {
+  if (args[0] === "auth") {
+    return result({
+      version_check: { current: "v1.0.69" },
+      success: true,
+      authenticated: true,
+      message: "ok",
+    });
+  }
+  if (args[1] === "+chat-search") {
+    return result({
+      chats: [{ openConversationId: "cid-good", name: "测试群", type: "group" }],
+      count: 1,
+    });
+  }
+  const groupIndex = args.indexOf("--group");
+  const groupId = groupIndex >= 0 ? args[groupIndex + 1] : "";
+  if (groupId === "cid-partial") {
+    return result(
+      {
+        messages: [
+          {
+            messageId: "msg-partial",
+            conversationId: "cid-partial",
+            sender: "Alice",
+            senderId: "u1",
+            text: "partial",
+            createTime: "2026-01-01 00:00:00",
+          },
+        ],
+        complete: false,
+        hasMore: false,
+        stopReason: "pagination_error",
+        failedCount: 1,
+        failures: [{ stage: "pagination", error: "page failed" }],
+        pagesFetched: 1,
+      },
+      1,
+      "partial failure",
+    );
+  }
+  return result({
+    messages: [
+      {
+        messageId: "msg-1",
+        conversationId: "cid-good",
+        sender: "Alice",
+        senderId: "u1",
+        senderType: "user",
+        messageType: "text",
+        text: "hello",
+        createTime: "2026-01-01 00:00:00",
+      },
+      { messageId: "bad", text: "" },
+    ],
+    complete: true,
+    hasMore: false,
+    pagesFetched: 1,
+    failedCount: 0,
+    failures: [],
+  });
+};
+
+async function start(run: DwsRunner = runner): Promise<{ server: Server; baseUrl: string }> {
+  const server = createGatewayServer({ config, runner: run, logger: () => undefined });
+  servers.push(server);
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address() as AddressInfo;
+  return { server, baseUrl: `http://127.0.0.1:${address.port}` };
+}
+
+function headers(token = "test-token"): Record<string, string> {
+  return { authorization: `Bearer ${token}`, "content-type": "application/json" };
+}
+
+afterEach(async () => {
+  for (const server of servers.splice(0)) {
+    server.closeAllConnections?.();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
+
+describe("dws gateway", () => {
+  it("reports health without authentication and auth status with it", async () => {
+    const { baseUrl } = await start();
+
+    const health = await fetch(`${baseUrl}/health`).then((response) => response.json());
+    expect(health).toMatchObject({
+      success: true,
+      data: { service: "dws-gateway", authenticated: true },
+    });
+
+    const unauthorized = await fetch(`${baseUrl}/v1/auth/status`);
+    expect(unauthorized.status).toBe(401);
+
+    const auth = (await fetch(`${baseUrl}/v1/auth/status`, {
+      headers: headers(),
+    }).then((response) => response.json())) as { data: { authenticated: boolean } };
+    expect(auth.data.authenticated).toBe(true);
+  });
+
+  it("returns normalized messages and enforces the group allowlist", async () => {
+    const { baseUrl } = await start();
+
+    const response = await fetch(`${baseUrl}/v1/chat/messages`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({
+        groupId: "cid-good",
+        start: "2026-01-01 00:00:00",
+        end: "2026-01-02 00:00:00",
+        pageAll: true,
+        pageLimit: 50,
+        maxItems: 100,
+      }),
+    });
+    const payload = (await response.json()) as {
+      data: {
+        complete: boolean;
+        hasMore: boolean;
+        count: number;
+        skipped: number;
+        failedCount: number;
+        messages: Array<Record<string, unknown>>;
+      };
+    };
+    expect(response.status).toBe(200);
+    expect(payload.data).toMatchObject({
+      complete: true,
+      hasMore: false,
+      count: 1,
+      skipped: 1,
+      failedCount: 0,
+    });
+    expect(payload.data.messages[0]).toMatchObject({
+      messageId: "msg-1",
+      conversationId: "cid-good",
+      text: "hello",
+    });
+
+    const denied = await fetch(`${baseUrl}/v1/chat/messages`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({ groupId: "cid-other" }),
+    });
+    expect(denied.status).toBe(403);
+  });
+
+  it("passes through partial DWS results without claiming completeness", async () => {
+    const { baseUrl } = await start();
+
+    const response = await fetch(`${baseUrl}/v1/chat/messages`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({ groupId: "cid-partial", pageAll: true }),
+    });
+    const payload = (await response.json()) as {
+      data: {
+        complete: boolean;
+        stopReason: string;
+        failures: unknown[];
+        messages: unknown[];
+      };
+    };
+    expect(response.status).toBe(200);
+    expect(payload.data.complete).toBe(false);
+    expect(payload.data.stopReason).toBe("pagination_error");
+    expect(payload.data.failures).toHaveLength(1);
+    expect(payload.data.messages).toHaveLength(1);
+  });
+
+  it("searches conversations", async () => {
+    const { baseUrl } = await start();
+    const response = await fetch(`${baseUrl}/v1/chat/search`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({ query: "测试" }),
+    });
+    const payload = (await response.json()) as {
+      data: { chats: Array<Record<string, unknown>> };
+    };
+    expect(payload.data.chats[0]).toMatchObject({
+      openConversationId: "cid-good",
+      name: "测试群",
+    });
+  });
+});

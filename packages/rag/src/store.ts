@@ -149,6 +149,13 @@ export class SqliteRagStore implements RagStore {
     write();
   }
 
+  hasMessage(channel: string, externalId: string): boolean {
+    const row = this.db
+      .prepare("SELECT 1 AS found FROM messages WHERE channel = ? AND external_id = ? LIMIT 1")
+      .get(channel, externalId) as { found: number } | undefined;
+    return Boolean(row);
+  }
+
   async search(query: string, options: MemorySearchOptions = {}): Promise<MemoryHit[]> {
     const topK = Math.max(1, options.topK ?? 8);
     const trimmed = query.trim();

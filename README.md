@@ -118,6 +118,36 @@ npm run daemon     # 同时提供钉钉和本地 CLI
 
 当前钉钉通道只处理文本；回复走被动 `sessionWebhook`，因此应用必须在消息有效期（通常约 1 小时）内回复。`DINGTALK_ROBOT_CODE` 暂时只用于日志，后续主动推送才会用到。
 
+### 通过 DWS 导入历史聊天
+
+机器人只能收到发给它的消息，标准 OpenAPI 也不提供任意历史聊天读取。要导入你账号可见的历史消息，可以把官方 `dws`（DingTalk Workspace CLI）放在另一台机器 B，A 上的 assistant 通过 Tailscale 内网 HTTPS 调用 B 的只读网关：
+
+```text
+A：assistant + Stream 机器人 + RAG
+B：dws auth login + dws-gateway
+```
+
+B 上的部署、Tailscale、launchd 和 A 的配置详见 [`docs/DWS_GATEWAY.md`](docs/DWS_GATEWAY.md)。
+
+A 上常用命令：
+
+```bash
+npm run dingtalk:dws-check
+npm run dingtalk:history -- --group <openConversationId> --since 2026-01-01
+npm run dingtalk:sync
+```
+
+配置：
+
+```bash
+DWS_ENABLED=true
+DWS_GATEWAY_URL=https://<B机器名>.<tailnet>.ts.net
+DWS_GATEWAY_TOKEN=...
+DWS_HISTORY_GROUPS=cid1,cid2
+```
+
+当前只开放只读导入，不开放发送。历史消息使用 `openMessageId` 去重，DWS 返回不完整结果时不会把该时间范围标记为已同步。
+
 RAG 会记录每轮对话并提供 `memory_search` 工具。默认使用 OpenAI 兼容的 embedding 接口，需配置 `RAG_EMBEDDING_API_KEY`（可选 `RAG_EMBEDDING_BASE_URL`）；本地调试可设 `RAG_EMBEDDING_PROVIDER=hash`。未配置凭证时 RAG 会自动跳过。
 
 密钥库使用本地加密文件（AES-256-GCM，条目级 nonce + AAD），主密钥默认保存在 macOS Keychain，访问会写入审计日志（不记录值）。可用命令管理：
@@ -183,36 +213,43 @@ launchd 会在崩溃后自动重启，日志写入 `data/logs/`。运行 `daemon
 
 ## 常用脚本
 
-| 命令                     | 说明                        |
-| ------------------------ | --------------------------- |
-| `npm run dev`            | 启动 assistant（REPL/钉钉） |
-| `npm run daemon`         | 前台启动常驻 daemon         |
-| `npm run assistant`      | 本地 CLI 控制 daemon        |
-| `npm run dingtalk:check` | 验证钉钉凭证与 Stream 连接  |
-| `npm run login`          | 登录订阅账号或保存模型凭证  |
-| `npm run model:check`    | 查看当前可用的模型与账号    |
-| `npm run daemon:install` | 安装 launchd 自启项         |
-| `npm run daemon:status`  | 查看 launchd 状态           |
-| `npm run build`          | 构建生产产物到 `dist/`      |
-| `npm run vault`          | 管理本地密钥库              |
-| `npm run typecheck`      | TypeScript 类型检查         |
-| `npm run lint`           | Biome 检查                  |
-| `npm run lint:fix`       | Biome 自动修复              |
-| `npm test`               | Vitest 运行测试             |
-| `npm run test:smoke`     | 构建产物的 daemon 冒烟测试  |
+| 命令                         | 说明                        |
+| ---------------------------- | --------------------------- |
+| `npm run dev`                | 启动 assistant（REPL/钉钉） |
+| `npm run daemon`             | 前台启动常驻 daemon         |
+| `npm run assistant`          | 本地 CLI 控制 daemon        |
+| `npm run dingtalk:check`     | 验证钉钉凭证与 Stream 连接  |
+| `npm run dingtalk:dws-check` | 检查 B 上的 DWS 网关        |
+| `npm run dingtalk:history`   | 手动导入指定群历史消息      |
+| `npm run dingtalk:sync`      | 按配置增量同步历史消息      |
+| `npm run gateway`            | 前台启动 DWS 网关（B 机）   |
+| `npm run login`              | 登录订阅账号或保存模型凭证  |
+| `npm run model:check`        | 查看当前可用的模型与账号    |
+| `npm run daemon:install`     | 安装 launchd 自启项         |
+| `npm run daemon:status`      | 查看 launchd 状态           |
+| `npm run build`              | 构建生产产物到 `dist/`      |
+| `npm run vault`              | 管理本地密钥库              |
+| `npm run typecheck`          | TypeScript 类型检查         |
+| `npm run lint`               | Biome 检查                  |
+| `npm run lint:fix`           | Biome 自动修复              |
+| `npm test`                   | Vitest 运行测试             |
+| `npm run test:smoke`         | 构建产物的 daemon 冒烟测试  |
 
 ## 目录结构
 
 ```
 apps/assistant/          # daemon + CLI 入口
+apps/dws-gateway/        # B 机只读 DWS 网关
 packages/
   config/                # zod 配置 schema 与加载
   core/                  # pi 会话装配、事件流、模型 provider
   rag/                   # 历史聊天知识库
   vault/                 # 加密密钥库
   channel-dingtalk/      # 钉钉 Stream 通道
+  dingtalk-dws/          # DWS 网关客户端与历史消息导入
   tasks/                 # 任务外派（AgentDispatcher）
 docs/PLAN.md             # 架构与里程碑
+docs/DWS_GATEWAY.md      # DWS 历史导入部署说明
 ```
 
 ## 当前进度
@@ -224,6 +261,7 @@ docs/PLAN.md             # 架构与里程碑
 - [x] M4 钉钉
 - [x] M5 任务外派
 - [x] M6 加固
+- [x] DWS 历史聊天导入
 
 ## 安全
 

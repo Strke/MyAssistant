@@ -54,6 +54,37 @@ describe("SqliteRagStore", () => {
     }
   });
 
+  it("deduplicates messages by channel and external id", async () => {
+    const store = openRagStore({ dbPath: ":memory:", embedder: hashEmbedder() });
+    try {
+      await store.addMessage({
+        id: "m1",
+        conversationId: "c1",
+        role: "user",
+        channel: "dingtalk",
+        externalId: "msg-1",
+        content: "第一条钉钉消息。",
+        createdAt: 1000,
+      });
+      await store.addMessage({
+        id: "m2",
+        conversationId: "c1",
+        role: "user",
+        channel: "dingtalk",
+        externalId: "msg-1",
+        content: "重复导入的钉钉消息。",
+        createdAt: 1000,
+      });
+
+      expect(store.hasMessage("dingtalk", "msg-1")).toBe(true);
+      expect(store.hasMessage("dingtalk", "msg-2")).toBe(false);
+      const hits = await store.search("钉钉消息", { topK: 10 });
+      expect(hits).toHaveLength(1);
+    } finally {
+      await store.close();
+    }
+  });
+
   it("filters by conversation and timestamp", async () => {
     const store = openRagStore({ dbPath: ":memory:", embedder: hashEmbedder() });
     try {

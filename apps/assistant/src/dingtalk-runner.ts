@@ -197,6 +197,7 @@ export function createDingTalkRunner(options: DingTalkRunnerOptions): DingTalkRu
       role: "user",
       channel: "dingtalk",
       sender: message.senderName ?? message.senderId,
+      externalId: message.messageId,
       content: message.text,
       createdAt: message.createdAt,
     });

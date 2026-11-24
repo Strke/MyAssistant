@@ -11,6 +11,7 @@
     "@myassistant/channel-dingtalk": "*",
     "@myassistant/config": "*",
     "@myassistant/core": "*",
+    "@myassistant/dingtalk-dws": "*",
     "@myassistant/rag": "*",
     "@myassistant/vault": "*",
     "@myassistant/tasks": "*"

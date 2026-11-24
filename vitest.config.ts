@@ -11,6 +11,7 @@ export default defineConfig({
       "@myassistant/rag": resolvePath("./packages/rag/src/index.ts"),
       "@myassistant/vault": resolvePath("./packages/vault/src/index.ts"),
       "@myassistant/channel-dingtalk": resolvePath("./packages/channel-dingtalk/src/index.ts"),
+      "@myassistant/dingtalk-dws": resolvePath("./packages/dingtalk-dws/src/index.ts"),
       "@myassistant/tasks": resolvePath("./packages/tasks/src/index.ts"),
     },
   },

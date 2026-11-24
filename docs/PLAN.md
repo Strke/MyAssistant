@@ -112,3 +112,4 @@ packages/
 - [x] M4 钉钉（Stream Mode 入站、去重、每会话独立 session、sessionWebhook 出站回复）
 - [x] M5 任务外派（任务持久化、并发/超时/取消、local / pi-rpc / http-a2a 后端、delegate/check/cancel/list 工具、钉钉完成推送）
 - [x] M6 加固（pino 脱敏日志、钉钉限流/长度限制/会话回收、daemon + Unix socket + 本地 CLI、launchd、tsup 打包、测试与 CI）
+- [x] DWS 历史聊天导入（B 机只读网关、Tailscale、群白名单、openMessageId 去重、增量同步）

@@ -60,4 +60,19 @@ describe("loadConfig", () => {
     });
     expect(config.tasks.httpUrl).toBe("http://127.0.0.1:8787/tasks");
   });
+
+  it("parses DWS history configuration", () => {
+    const config = loadConfig({
+      DWS_ENABLED: "true",
+      DWS_GATEWAY_URL: "https://dws-b.example",
+      DWS_HISTORY_GROUPS: "cid-1, cid-2",
+      DWS_PAGE_SIZE: "50",
+      DWS_MAX_ITEMS_PER_SYNC: "1000",
+    });
+    expect(config.dws.enabled).toBe(true);
+    expect(config.dws.gatewayUrl).toBe("https://dws-b.example");
+    expect(config.dws.historyGroups).toEqual(["cid-1", "cid-2"]);
+    expect(config.dws.pageSize).toBe(50);
+    expect(config.dws.maxItemsPerSync).toBe(1000);
+  });
 });

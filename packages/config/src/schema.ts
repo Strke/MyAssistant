@@ -19,6 +19,16 @@ const envBoolean = z.preprocess((value) => {
 
 const optionalString = z.string().min(1).optional();
 
+const envCsv = z.preprocess((value) => {
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return value;
+}, z.array(z.string()).default([]));
+
 export const appConfigSchema = z.object({
   app: z.object({
     env: z.enum(["development", "test", "production"]).default("development"),
@@ -80,6 +90,18 @@ export const appConfigSchema = z.object({
     socketPath: z.string().min(1).default("./data/assistant.sock"),
     localSessionDir: z.string().min(1).default("./data/local-sessions"),
     localSessionIdleMinutes: z.coerce.number().int().positive().default(120),
+  }),
+  dws: z.object({
+    enabled: envBoolean.default(false),
+    gatewayUrl: z.string().min(1).default("http://127.0.0.1:8787"),
+    gatewayToken: optionalString,
+    historyGroups: envCsv,
+    historyIntervalMinutes: z.coerce.number().int().positive().default(60),
+    historyOverlapMinutes: z.coerce.number().int().nonnegative().default(10),
+    historyBackfillDays: z.coerce.number().int().positive().default(30),
+    requestTimeoutSeconds: z.coerce.number().int().positive().default(120),
+    pageSize: z.coerce.number().int().positive().max(500).default(100),
+    maxItemsPerSync: z.coerce.number().int().positive().default(5_000),
   }),
   tasks: z
     .object({
@@ -160,6 +182,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       socketPath: clean(env.DAEMON_SOCKET_PATH),
       localSessionDir: clean(env.DAEMON_LOCAL_SESSION_DIR),
       localSessionIdleMinutes: clean(env.DAEMON_LOCAL_SESSION_IDLE_MINUTES),
+    },
+    dws: {
+      enabled: clean(env.DWS_ENABLED),
+      gatewayUrl: clean(env.DWS_GATEWAY_URL),
+      gatewayToken: clean(env.DWS_GATEWAY_TOKEN),
+      historyGroups: clean(env.DWS_HISTORY_GROUPS),
+      historyIntervalMinutes: clean(env.DWS_HISTORY_INTERVAL_MINUTES),
+      historyOverlapMinutes: clean(env.DWS_HISTORY_OVERLAP_MINUTES),
+      historyBackfillDays: clean(env.DWS_HISTORY_BACKFILL_DAYS),
+      requestTimeoutSeconds: clean(env.DWS_REQUEST_TIMEOUT_SECONDS),
+      pageSize: clean(env.DWS_PAGE_SIZE),
+      maxItemsPerSync: clean(env.DWS_MAX_ITEMS_PER_SYNC),
     },
     tasks: {
       enabled: clean(env.TASKS_ENABLED),

@@ -11,6 +11,7 @@ export interface ConversationRecord {
   role: "user" | "assistant";
   channel: string;
   sender?: string;
+  externalId?: string;
   content: string;
   createdAt: number;
 }
