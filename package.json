@@ -17,6 +17,7 @@
     "daemon:install": "tsx apps/assistant/src/launchd.ts install",
     "daemon:uninstall": "tsx apps/assistant/src/launchd.ts uninstall",
     "daemon:status": "tsx apps/assistant/src/launchd.ts status",
+    "dingtalk:check": "tsx apps/assistant/src/dingtalk-check.ts",
     "assistant": "tsx apps/assistant/src/client.ts",
     "vault": "tsx apps/assistant/src/cli.ts",
     "build": "tsup",

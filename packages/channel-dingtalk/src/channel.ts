@@ -14,6 +14,11 @@ interface WebhookRecord {
 }
 
 const DEDUPE_TTL_MS = 10 * 60_000;
+const CONNECT_TIMEOUT_MS = 15_000;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export class DingTalkChannel implements ChatChannel {
   private readonly options: DingTalkChannelOptions;
@@ -36,13 +41,36 @@ export class DingTalkChannel implements ChatChannel {
     const client = new DWClient({
       clientId: this.options.clientId,
       clientSecret: this.options.clientSecret,
-      debug: this.options.debug,
+      debug: false,
     });
     this.client = client;
     client.registerCallbackListener(TOPIC_ROBOT, (message) => {
       void this.handleCallback(client, message);
     });
+
+    try {
+      // getEndpoint validates the credentials and the Stream subscription
+      // before we wait on the WebSocket handshake.
+      await client.getEndpoint();
+    } catch (error) {
+      this.client = undefined;
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`DingTalk Stream endpoint check failed: ${message}`);
+    }
+
     await client.connect();
+    const deadline = Date.now() + CONNECT_TIMEOUT_MS;
+    while (!client.connected) {
+      if (Date.now() >= deadline) {
+        client.disconnect();
+        this.client = undefined;
+        throw new Error(
+          "DingTalk Stream WebSocket did not connect within 15 seconds. " +
+            "Check that the app has the robot capability in Stream mode, is published, and that outbound HTTPS is allowed.",
+        );
+      }
+      await delay(100);
+    }
   }
 
   async stop(): Promise<void> {

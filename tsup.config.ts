@@ -6,6 +6,7 @@ export default defineConfig({
     vault: "apps/assistant/src/cli.ts",
     client: "apps/assistant/src/client.ts",
     launchd: "apps/assistant/src/launchd.ts",
+    "dingtalk-check": "apps/assistant/src/dingtalk-check.ts",
   },
   outDir: "dist",
   format: ["esm"],

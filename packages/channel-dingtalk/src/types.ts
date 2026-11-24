@@ -30,7 +30,6 @@ export interface DingTalkChannelOptions {
   clientId: string;
   clientSecret: string;
   robotCode?: string;
-  debug?: boolean;
   fetchImpl?: typeof fetch;
   onError?: (error: Error) => void;
 }

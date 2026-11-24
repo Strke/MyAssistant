@@ -28,7 +28,6 @@ export function createDingTalkService(options: DingTalkServiceOptions): DingTalk
     clientId: config.dingtalk.clientId,
     clientSecret: config.dingtalk.clientSecret,
     robotCode: config.dingtalk.robotCode,
-    debug: config.app.env !== "production",
     onError: (error) => {
       options.logger?.error({ err: error }, "dingtalk channel error");
     },

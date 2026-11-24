@@ -31,16 +31,39 @@ REPL 内置命令：`/help`、`/status`、`/new`、`/exit`。会话会自动持�
 
 ### 钉钉（Stream Mode）
 
-在钉钉开放平台创建企业内部应用并添加 Stream 模式机器人，然后填入 `.env`：
+在钉钉开放平台创建企业内部应用并添加 Stream 模式机器人：
+
+1. 开发者后台 → 创建**企业内部应用**，在「凭证与基础信息」拿到 ClientID（AppKey）和 ClientSecret（AppSecret）。
+2. 「应用能力」→ 添加**机器人**，消息接收模式选择 **Stream 模式**，然后发布应用版本。
+3. 按需给应用授权，并把机器人添加到群聊或从通讯录发起单聊。
+4. 填入 `.env`（不要提交或发到聊天里）：
 
 ```bash
 DINGTALK_ENABLED=true
 DINGTALK_CLIENT_ID=your-app-key
 DINGTALK_CLIENT_SECRET=your-app-secret
-DINGTALK_ROBOT_CODE=your-robot-code
+DINGTALK_ROBOT_CODE=your-robot-code   # 可选；当前被动回复用 sessionWebhook，不填也能收消息
 ```
 
-启用后 `npm run dev` 进入钉钉模式（不再启动 REPL），收到的文本消息会转给 pi 并回复，每个会话使用独立的持久化 session。
+5. 先单独验证凭证和 Stream 握手，不需要配置模型：
+
+```bash
+npm run dingtalk:check
+```
+
+看到 `[dingtalk] ✅ Stream connected` 就说明钉钉侧已接通。失败时会输出 HTTP 状态和 `authFailed` 等原因，可据此检查 AppKey/AppSecret、机器人能力、Stream 模式、应用是否已发布以及网络。
+
+6. 启动 assistant：
+
+```bash
+npm run dev        # 钉钉模式（收到消息后转给 pi）
+# 或
+npm run daemon     # 同时提供钉钉和本地 CLI
+```
+
+还需要配置模型凭证（`.env` 的 `MODEL_API_KEY`，或本机 `pi` 登录过），否则能收到消息但无法生成回复。群聊里需要 @ 机器人。启用后 `npm run dev` 进入钉钉模式（不再启动 REPL），收到的文本消息会转给 pi 并回复，每个会话使用独立的持久化 session。
+
+当前钉钉通道只处理文本；回复走被动 `sessionWebhook`，因此应用必须在消息有效期（通常约 1 小时）内回复。`DINGTALK_ROBOT_CODE` 暂时只用于日志，后续主动推送才会用到。
 
 RAG 会记录每轮对话并提供 `memory_search` 工具。默认使用 OpenAI 兼容的 embedding 接口，需配置 `RAG_EMBEDDING_API_KEY`（可选 `RAG_EMBEDDING_BASE_URL`）；本地调试可设 `RAG_EMBEDDING_PROVIDER=hash`。未配置凭证时 RAG 会自动跳过。
 
@@ -112,6 +135,7 @@ launchd 会在崩溃后自动重启，日志写入 `data/logs/`。运行 `daemon
 | `npm run dev`            | 启动 assistant（REPL/钉钉） |
 | `npm run daemon`         | 前台启动常驻 daemon         |
 | `npm run assistant`      | 本地 CLI 控制 daemon        |
+| `npm run dingtalk:check` | 验证钉钉凭证与 Stream 连接  |
 | `npm run daemon:install` | 安装 launchd 自启项         |
 | `npm run daemon:status`  | 查看 launchd 状态           |
 | `npm run build`          | 构建生产产物到 `dist/`      |
