@@ -15,7 +15,7 @@ const config: GatewayConfig = {
   port: 0,
   token: "test-token",
   dwsBin: "dws",
-  allowedGroups: new Set(["cid-good", "cid-partial"]),
+  allowedGroups: new Set(["cid-good", "cid-partial", "cid-empty"]),
   requestTimeoutMs: 5_000,
   maxItems: 1_000,
   maxConcurrent: 2,
@@ -48,6 +48,21 @@ const runner: DwsRunner = async (args) => {
   }
   const groupIndex = args.indexOf("--group");
   const groupId = groupIndex >= 0 ? args[groupIndex + 1] : "";
+  if (groupId === "cid-empty") {
+    return result(
+      {
+        contractVersion: "im.message-list.v1",
+        messages: [],
+        complete: false,
+        hasMore: false,
+        stopReason: "pagination_error",
+        failedCount: 1,
+        failures: [{ stage: "pagination", error: "page failed" }],
+      },
+      1,
+      JSON.stringify({ error: { message: "page failed" } }),
+    );
+  }
   if (groupId === "cid-partial") {
     return result(
       {
@@ -200,6 +215,22 @@ describe("dws gateway", () => {
     expect(payload.data.stopReason).toBe("pagination_error");
     expect(payload.data.failures).toHaveLength(1);
     expect(payload.data.messages).toHaveLength(1);
+  });
+
+  it("returns structured partial results with zero messages", async () => {
+    const { baseUrl } = await start();
+    const response = await fetch(`${baseUrl}/v1/chat/messages`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({ groupId: "cid-empty", pageAll: true }),
+    });
+    const payload = (await response.json()) as {
+      data: { complete: boolean; count: number; failures: unknown[] };
+    };
+    expect(response.status).toBe(200);
+    expect(payload.data.complete).toBe(false);
+    expect(payload.data.count).toBe(0);
+    expect(payload.data.failures).toHaveLength(1);
   });
 
   it("searches conversations", async () => {

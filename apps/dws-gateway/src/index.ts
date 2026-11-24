@@ -102,8 +102,10 @@ function errorMessageFrom(value: unknown): string | undefined {
 }
 
 function commandError(result: CommandResult, parsed: unknown): Error {
+  const stderrParsed = parseJson(result.stderr);
   const message =
     errorMessageFrom(parsed) ??
+    errorMessageFrom(stderrParsed) ??
     (result.stderr.trim().slice(0, 500) || `dws exited with code ${result.code}.`);
   return new Error(result.timedOut ? `dws timed out: ${message}` : message);
 }
@@ -431,7 +433,12 @@ export function createGatewayServer(options: GatewayOptions): Server {
       throw commandError(result, undefined);
     }
     const page = normalizeMessagePage(parsed, groupId ?? userId ?? openDingTalkId ?? "");
-    if (page.messages.length === 0 && result.code !== 0) {
+    const parsedRecord = asRecord(parsed);
+    const structuredResult =
+      typeof parsedRecord?.contractVersion === "string" ||
+      typeof parsedRecord?.complete === "boolean" ||
+      Array.isArray(parsedRecord?.failures);
+    if (page.messages.length === 0 && result.code !== 0 && !structuredResult) {
       throw commandError(result, parsed);
     }
     return page;
