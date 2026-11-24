@@ -10,6 +10,7 @@ import {
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import type { AppConfig } from "@myassistant/config";
+import type { Logger } from "./logging";
 import { DEFAULT_ASSISTANT_SYSTEM_PROMPT } from "./prompt";
 
 export interface AssistantSession {
@@ -27,9 +28,14 @@ export interface CreateAssistantSessionOptions {
   systemPrompt?: string;
   /** Tool names to disable for this session. */
   excludeTools?: string[];
+  logger?: Logger;
 }
 
-async function loadSystemPrompt(config: AppConfig, override?: string): Promise<string> {
+async function loadSystemPrompt(
+  config: AppConfig,
+  override?: string,
+  logger?: Logger,
+): Promise<string> {
   if (override) {
     return override;
   }
@@ -40,7 +46,7 @@ async function loadSystemPrompt(config: AppConfig, override?: string): Promise<s
   try {
     return await readFile(resolve(file), "utf8");
   } catch {
-    process.stderr.write(`[assistant] system prompt file not found: ${file}\n`);
+    logger?.warn({ file }, "system prompt file not found, using default");
     return DEFAULT_ASSISTANT_SYSTEM_PROMPT;
   }
 }
@@ -68,7 +74,7 @@ export async function createAssistantSession(
     );
   }
 
-  const systemPrompt = await loadSystemPrompt(config, options.systemPrompt);
+  const systemPrompt = await loadSystemPrompt(config, options.systemPrompt, options.logger);
   const resourceLoader = new DefaultResourceLoader({
     cwd,
     agentDir: getAgentDir(),
@@ -93,7 +99,7 @@ export async function createAssistantSession(
   });
 
   if (modelFallbackMessage) {
-    process.stderr.write(`[assistant] ${modelFallbackMessage}\n`);
+    options.logger?.warn({ message: modelFallbackMessage }, "model fallback");
   }
 
   return { session, modelRuntime };

@@ -11,5 +11,11 @@
       "@myassistant/tasks": ["packages/tasks/src/index.ts"]
     }
   },
-  "include": ["packages/**/*.ts", "apps/**/*.ts", "vitest.config.ts"]
+  "include": [
+    "packages/**/*.ts",
+    "apps/**/*.ts",
+    "scripts/**/*.ts",
+    "vitest.config.ts",
+    "tsup.config.ts"
+  ]
 }

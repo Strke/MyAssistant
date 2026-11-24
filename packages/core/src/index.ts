@@ -1,4 +1,6 @@
 export type { AgentSession, ToolDefinition } from "@earendil-works/pi-coding-agent";
+export type { CreateLoggerOptions, Logger } from "./logging";
+export { createLogger, sanitizeForLog, serializeError } from "./logging";
 export { DEFAULT_ASSISTANT_SYSTEM_PROMPT } from "./prompt";
 export type { ConversationRecord, ReplOptions } from "./repl";
 export { runRepl } from "./repl";

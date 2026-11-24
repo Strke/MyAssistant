@@ -11,6 +11,7 @@ export interface RuntimeSummary {
   model: string;
   dingtalk: "enabled" | "disabled";
   rag: "enabled" | "disabled";
+  daemon: "enabled" | "disabled";
   tasks: AppConfig["tasks"]["backend"];
 }
 
@@ -20,6 +21,7 @@ export function describeRuntime(config: AppConfig): RuntimeSummary {
     model: `${config.model.provider}/${config.model.id}`,
     dingtalk: config.dingtalk.enabled ? "enabled" : "disabled",
     rag: config.rag.enabled ? "enabled" : "disabled",
+    daemon: config.daemon.enabled ? "enabled" : "disabled",
     tasks: config.tasks.backend,
   };
 }

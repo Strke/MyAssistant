@@ -1,6 +1,7 @@
 import { join, resolve } from "node:path";
 import type { AppConfig } from "@myassistant/config";
 import type { AgentTask, TaskExecutor } from "@myassistant/tasks";
+import type { Logger } from "./logging";
 import { createAssistantSession } from "./session";
 
 export interface PiSubagentExecutorOptions {
@@ -8,6 +9,7 @@ export interface PiSubagentExecutorOptions {
   sessionRoot?: string;
   /** Override the worker system prompt. */
   systemPrompt?: string | ((task: AgentTask) => string);
+  logger?: Logger;
 }
 
 export const DEFAULT_TASK_SYSTEM_PROMPT = `You are a focused worker agent inside MyAssistant, running a task delegated by the user's main assistant.
@@ -44,6 +46,7 @@ export function createPiSubagentExecutor(
         newSession: true,
         sessionDir: join(sessionRoot, task.id),
         systemPrompt: resolvePrompt(task, options.systemPrompt),
+        logger: options.logger,
       });
 
       if (signal.aborted) {

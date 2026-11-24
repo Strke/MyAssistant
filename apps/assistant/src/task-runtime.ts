@@ -1,6 +1,6 @@
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import type { AppConfig } from "@myassistant/config";
-import { createPiSubagentExecutor } from "@myassistant/core";
+import { createPiSubagentExecutor, type Logger } from "@myassistant/core";
 import {
   createHttpTaskExecutor,
   createPiRpcExecutor,
@@ -11,14 +11,16 @@ import {
 
 export interface OpenTaskManagerOptions {
   onError?: (error: unknown) => void;
+  logger?: Logger;
 }
 
-function createExecutor(config: AppConfig): TaskExecutor {
+function createExecutor(config: AppConfig, logger?: Logger): TaskExecutor {
   switch (config.tasks.backend) {
     case "local":
     case "pi-subagent":
       return createPiSubagentExecutor(config, {
         sessionRoot: resolve(config.tasks.sessionDir),
+        logger,
       });
     case "pi-rpc":
       return createPiRpcExecutor({
@@ -28,6 +30,9 @@ function createExecutor(config: AppConfig): TaskExecutor {
         cliPath: config.tasks.piRpcCli,
         cwd: resolve(config.agent.workspace),
         thinkingLevel: config.model.thinkingLevel,
+        env: {
+          PATH: `${dirname(process.execPath)}:${process.env.PATH ?? ""}`,
+        },
       });
     case "http-a2a": {
       if (!config.tasks.httpUrl) {
@@ -48,7 +53,7 @@ export async function openTaskManager(
 
   const manager = new TaskManager({
     store: new JsonTaskStore(resolve(config.tasks.path)),
-    executor: createExecutor(config),
+    executor: createExecutor(config, options.logger),
     backend: config.tasks.backend,
     concurrency: config.tasks.concurrency,
     timeoutMs: config.tasks.timeoutMinutes * 60_000,

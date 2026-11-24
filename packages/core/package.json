@@ -12,6 +12,7 @@
     "@earendil-works/pi-ai": "^1.6.0",
     "@earendil-works/pi-coding-agent": "^1.6.0",
     "@myassistant/config": "*",
-    "@myassistant/tasks": "*"
+    "@myassistant/tasks": "*",
+    "pino": "^10.4.0"
   }
 }

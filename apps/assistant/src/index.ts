@@ -1,5 +1,5 @@
 import { loadConfigFromEnvFile } from "@myassistant/config";
-import { describeRuntime, runRepl, type ToolDefinition } from "@myassistant/core";
+import { createLogger, describeRuntime, runRepl, type ToolDefinition } from "@myassistant/core";
 import {
   type ChatMessageRecord,
   createEmbedder,
@@ -8,12 +8,15 @@ import {
 } from "@myassistant/rag";
 import { createTaskTools, type TaskManager } from "@myassistant/tasks";
 import { createVaultTools, type Vault } from "@myassistant/vault";
+import { runDaemon } from "./daemon";
 import { runDingTalkMode } from "./dingtalk-mode";
 import { openTaskManager } from "./task-runtime";
 import { openVault } from "./vault-runtime";
 
 const config = loadConfigFromEnvFile();
-process.stdout.write(`[assistant] config: ${JSON.stringify(describeRuntime(config))}\n`);
+const logger = createLogger({ level: config.app.logLevel });
+logger.info({ runtime: describeRuntime(config) }, "assistant starting");
+const daemonMode = process.argv.includes("--daemon") || config.daemon.enabled;
 
 const customTools: ToolDefinition[] = [];
 let store: ReturnType<typeof openRagStore> | undefined;
@@ -23,12 +26,16 @@ if (config.rag.enabled) {
     const embedder = createEmbedder(config.rag.embedding);
     store = openRagStore({ dbPath: config.rag.dbPath, embedder });
     customTools.push(createMemorySearchTool(store, config.rag.topK) as ToolDefinition);
-    process.stdout.write(
-      `[assistant] rag: ${config.rag.dbPath} (${config.rag.embedding.provider}/${config.rag.embedding.model})\n`,
+    logger.info(
+      {
+        path: config.rag.dbPath,
+        provider: config.rag.embedding.provider,
+        model: config.rag.embedding.model,
+      },
+      "rag enabled",
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`[assistant] rag disabled: ${message}\n`);
+    logger.warn({ err: error }, "rag disabled");
   }
 }
 
@@ -38,10 +45,9 @@ let vault: Vault | undefined;
 try {
   vault = openVault(config);
   customTools.push(...createVaultTools(vault));
-  process.stdout.write(`[assistant] vault: ${config.vault.path}\n`);
+  logger.info({ path: config.vault.path }, "vault enabled");
 } catch (error) {
-  const message = error instanceof Error ? error.message : String(error);
-  process.stderr.write(`[assistant] vault disabled: ${message}\n`);
+  logger.warn({ err: error }, "vault disabled");
 }
 
 const activeVault = vault;
@@ -50,18 +56,22 @@ let taskManager: TaskManager | undefined;
 try {
   taskManager = await openTaskManager(config, {
     onError: (error) => {
-      const message = error instanceof Error ? error.message : String(error);
-      process.stderr.write(`[tasks] ${message}\n`);
+      logger.error({ err: error }, "task manager error");
     },
+    logger,
   });
   if (taskManager) {
-    process.stdout.write(
-      `[assistant] tasks: ${config.tasks.backend} (${config.tasks.path}, concurrency ${config.tasks.concurrency})\n`,
+    logger.info(
+      {
+        backend: config.tasks.backend,
+        path: config.tasks.path,
+        concurrency: config.tasks.concurrency,
+      },
+      "tasks enabled",
     );
   }
 } catch (error) {
-  const message = error instanceof Error ? error.message : String(error);
-  process.stderr.write(`[assistant] tasks disabled: ${message}\n`);
+  logger.warn({ err: error }, "tasks disabled");
 }
 
 const activeTaskManager = taskManager;
@@ -69,14 +79,28 @@ const activeTaskManager = taskManager;
 const onMessage = ragStore ? (record: ChatMessageRecord) => ragStore.addMessage(record) : undefined;
 
 try {
-  if (config.dingtalk.enabled) {
-    await runDingTalkMode({ config, customTools, taskManager: activeTaskManager, onMessage });
+  if (daemonMode) {
+    await runDaemon({
+      config,
+      customTools,
+      taskManager: activeTaskManager,
+      onMessage,
+      logger,
+    });
+  } else if (config.dingtalk.enabled) {
+    await runDingTalkMode({
+      config,
+      customTools,
+      taskManager: activeTaskManager,
+      onMessage,
+      logger,
+    });
   } else {
     const localTools = [
       ...customTools,
       ...(activeTaskManager ? createTaskTools(activeTaskManager) : []),
     ];
-    await runRepl(config, { customTools: localTools, onMessage });
+    await runRepl(config, { customTools: localTools, onMessage, logger });
   }
 } finally {
   await activeTaskManager?.close();

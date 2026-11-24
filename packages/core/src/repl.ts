@@ -2,6 +2,7 @@ import { stdin, stdout } from "node:process";
 import { createInterface } from "node:readline/promises";
 import type { AgentSession, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { AppConfig } from "@myassistant/config";
+import type { Logger } from "./logging";
 import { createAssistantSession } from "./session";
 
 export interface ConversationRecord {
@@ -18,6 +19,7 @@ export interface ReplOptions {
   customTools?: ToolDefinition[];
   onMessage?: (record: ConversationRecord) => Promise<void>;
   channel?: string;
+  logger?: Logger;
 }
 
 const HELP_TEXT = `Commands:
@@ -117,13 +119,17 @@ export async function runRepl(config: AppConfig, options: ReplOptions = {}): Pro
   let pending: Promise<void> = Promise.resolve();
   const enqueue = (task: () => Promise<void>) => {
     pending = pending.then(task).catch((error) => {
-      const message = error instanceof Error ? error.message : String(error);
-      stdout.write(`\n[rag] failed to persist message: ${message}\n`);
+      options.logger?.error({ err: error }, "failed to persist conversation message");
     });
   };
 
   const createSession = (newSession = false) =>
-    createAssistantSession({ config, customTools: options.customTools, newSession });
+    createAssistantSession({
+      config,
+      customTools: options.customTools,
+      newSession,
+      logger: options.logger,
+    });
 
   let current = await createSession();
   let unsubscribe = attachStream(current.session, channel, options.onMessage, enqueue);

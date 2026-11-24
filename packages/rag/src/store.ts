@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { chmodSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import Database from "better-sqlite3";
 import * as sqliteVec from "sqlite-vec";
@@ -60,10 +60,17 @@ export class SqliteRagStore implements RagStore {
     this.overlap = options.overlap ?? 100;
 
     if (options.dbPath !== ":memory:") {
-      mkdirSync(dirname(resolve(options.dbPath)), { recursive: true });
+      mkdirSync(dirname(resolve(options.dbPath)), { recursive: true, mode: 0o700 });
     }
 
     this.db = new Database(options.dbPath);
+    if (options.dbPath !== ":memory:") {
+      try {
+        chmodSync(options.dbPath, 0o600);
+      } catch {
+        // Best-effort on filesystems that do not support chmod.
+      }
+    }
     this.db.pragma("journal_mode = WAL");
     sqliteVec.load(this.db);
     this.migrate();

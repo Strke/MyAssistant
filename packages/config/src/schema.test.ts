@@ -34,4 +34,30 @@ describe("loadConfig", () => {
     expect(config.model.apiKey).toBeUndefined();
     expect(config.rag.dbPath).toBe("./data/assistant.db");
   });
+
+  it("parses daemon and dingtalk hardening settings", () => {
+    const config = loadConfig({
+      DAEMON_ENABLED: "true",
+      DAEMON_SOCKET_PATH: "/tmp/assistant.sock",
+      DINGTALK_RATE_LIMIT_PER_MINUTE: "5",
+      DINGTALK_SESSION_IDLE_MINUTES: "30",
+      TASKS_CONCURRENCY: "3",
+      TASKS_TIMEOUT_MINUTES: "10",
+    });
+    expect(config.daemon.enabled).toBe(true);
+    expect(config.daemon.socketPath).toBe("/tmp/assistant.sock");
+    expect(config.dingtalk.rateLimitPerMinute).toBe(5);
+    expect(config.dingtalk.sessionIdleMinutes).toBe(30);
+    expect(config.tasks.concurrency).toBe(3);
+    expect(config.tasks.timeoutMinutes).toBe(10);
+  });
+
+  it("requires a URL for the http-a2a task backend", () => {
+    expect(() => loadConfig({ TASKS_BACKEND: "http-a2a" })).toThrow(/TASKS_HTTP_URL/);
+    const config = loadConfig({
+      TASKS_BACKEND: "http-a2a",
+      TASKS_HTTP_URL: "http://127.0.0.1:8787/tasks",
+    });
+    expect(config.tasks.httpUrl).toBe("http://127.0.0.1:8787/tasks");
+  });
 });

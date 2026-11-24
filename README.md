@@ -5,7 +5,8 @@
 - **RAG 历史聊天知识库**：SQLite + `sqlite-vec` + FTS5 混合检索
 - **本地密钥库**：AES-256-GCM 加密 + macOS Keychain 解锁
 - **钉钉聊天**：Stream Mode（无需公网 IP）
-- **任务外派**：预留 `AgentDispatcher`，可派发给其它 agent
+- **任务外派**：持久化任务队列，可派发给子 agent / RPC / HTTP A2A
+- **常驻守护进程**：Unix socket 本地控制、launchd 自启、结构化脱敏日志
 
 完整架构与路线图见 [`docs/PLAN.md`](docs/PLAN.md)。
 
@@ -24,7 +25,7 @@ cp .env.example .env
 npm run dev
 ```
 
-`npm run dev` 默认启动 REPL（当前为 M1–M5）。首次使用需要配置模型凭证：填入 `.env` 的 `MODEL_API_KEY`，或在本机运行过一次 `pi` 并用 `/login` 登录。
+`npm run dev` 默认启动 REPL（当前为 M1–M6）。首次使用需要配置模型凭证：填入 `.env` 的 `MODEL_API_KEY`，或在本机运行过一次 `pi` 并用 `/login` 登录。
 
 REPL 内置命令：`/help`、`/status`、`/new`、`/exit`。会话会自动持久化。
 
@@ -72,16 +73,54 @@ TASKS_BACKEND=http-a2a         # 转发到 TASKS_HTTP_URL，POST 创建、GET �
 
 其他配置：`TASKS_CONCURRENCY`（默认 2）、`TASKS_TIMEOUT_MINUTES`（默认 30）、`TASKS_MAX_RECORDS`（默认 500）。钉钉会话通过 `delegate_task` 创建的任务完成后，会主动推送结果到原会话。
 
+### 守护进程与本地 CLI
+
+需要常驻时使用 daemon 模式。它会同时托管钉钉连接、任务队列、本地聊天 session，并在 `data/assistant.sock` 上提供本地控制接口：
+
+```bash
+npm run daemon                         # 前台运行 daemon
+npm run assistant -- status            # 查看状态、任务统计
+npm run assistant -- ping
+npm run assistant -- chat "你好"        # 单次对话（流式输出）
+npm run assistant -- chat              # 交互式对话
+npm run assistant -- task list
+npm run assistant -- task check <id>
+npm run assistant -- shutdown
+```
+
+也可以在 `.env` 设置 `DAEMON_ENABLED=true`，让 `npm run dev` 直接进入 daemon 模式。socket 权限为 `0600`，只允许当前用户访问。
+
+钉钉与本地 session 都有空闲回收和数量上限：`DINGTALK_SESSION_IDLE_MINUTES`（默认 120）、`DINGTALK_MAX_SESSIONS`（默认 100）；单会话限流 `DINGTALK_RATE_LIMIT_PER_MINUTE`（默认 20），单条消息上限 `DINGTALK_MAX_MESSAGE_CHARS`（默认 8000）。
+
+### 构建与 launchd 自启
+
+```bash
+npm run build              # 输出 dist/assistant.js、client.js、vault.js、launchd.js
+npm run start              # 运行构建产物（REPL）
+npm run start:daemon       # 运行构建产物（daemon）
+npm run daemon:install     # 写入 ~/Library/LaunchAgents 并启动
+npm run daemon:status
+npm run daemon:uninstall
+```
+
+launchd 会在崩溃后自动重启，日志写入 `data/logs/`。运行 `daemon:install` 前需要先执行 `npm run build`。
+
 ## 常用脚本
 
-| 命令                | 说明                |
-| ------------------- | ------------------- |
-| `npm run dev`       | 启动 assistant      |
-| `npm run vault`     | 管理本地密钥库      |
-| `npm run typecheck` | TypeScript 类型检查 |
-| `npm run lint`      | Biome 检查          |
-| `npm run lint:fix`  | Biome 自动修复      |
-| `npm test`          | Vitest 运行测试     |
+| 命令                     | 说明                        |
+| ------------------------ | --------------------------- |
+| `npm run dev`            | 启动 assistant（REPL/钉钉） |
+| `npm run daemon`         | 前台启动常驻 daemon         |
+| `npm run assistant`      | 本地 CLI 控制 daemon        |
+| `npm run daemon:install` | 安装 launchd 自启项         |
+| `npm run daemon:status`  | 查看 launchd 状态           |
+| `npm run build`          | 构建生产产物到 `dist/`      |
+| `npm run vault`          | 管理本地密钥库              |
+| `npm run typecheck`      | TypeScript 类型检查         |
+| `npm run lint`           | Biome 检查                  |
+| `npm run lint:fix`       | Biome 自动修复              |
+| `npm test`               | Vitest 运行测试             |
+| `npm run test:smoke`     | 构建产物的 daemon 冒烟测试  |
 
 ## 目录结构
 
@@ -105,8 +144,8 @@ docs/PLAN.md             # 架构与里程碑
 - [x] M3 Vault
 - [x] M4 钉钉
 - [x] M5 任务外派
-- [ ] M6 加固
+- [x] M6 加固
 
 ## 安全
 
-密钥只应存放于 Vault；`.env` 仅用于启动引导配置，且已被 `.gitignore` 忽略。日志与配置摘要均不得包含明文密钥。
+密钥只应存放于 Vault；`.env` 仅用于启动引导配置，且已被 `.gitignore` 忽略。日志通过 pino 递归脱敏（api key、token、secret、password、authorization 等），配置摘要不包含明文密钥。控制 socket 仅当前用户可读写，钉钉消息有去重、限流和长度限制。

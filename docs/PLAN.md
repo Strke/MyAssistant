@@ -83,7 +83,7 @@ packages/
 
 ### 4.5 进程模型
 
-单个 daemon 持有 pi 会话、钉钉连接、RAG、vault、任务调度；本地 CLI 通过 localhost socket 控制；保留 REPL 调试；用 launchd LaunchAgent 自启。
+单个 daemon 持有 pi 会话、钉钉连接、RAG、vault、任务调度；本地 CLI 通过 localhost socket 控制；保留 REPL 调试；用 launchd LaunchAgent 自启。当前 daemon 使用 Unix socket（`data/assistant.sock`），CLI 覆盖 status / ping / chat / task / shutdown。
 
 ## 5. 安全基线
 
@@ -111,4 +111,4 @@ packages/
 - [x] M3 Vault（AES-256-GCM 加密存储、Keychain/Env/Passphrase 主密钥、自动锁定、审计、vault 工具与 CLI）
 - [x] M4 钉钉（Stream Mode 入站、去重、每会话独立 session、sessionWebhook 出站回复）
 - [x] M5 任务外派（任务持久化、并发/超时/取消、local / pi-rpc / http-a2a 后端、delegate/check/cancel/list 工具、钉钉完成推送）
-- [ ] M6 加固
+- [x] M6 加固（pino 脱敏日志、钉钉限流/长度限制/会话回收、daemon + Unix socket + 本地 CLI、launchd、tsup 打包、测试与 CI）

@@ -42,6 +42,10 @@ export const appConfigSchema = z.object({
       clientId: optionalString,
       clientSecret: optionalString,
       robotCode: optionalString,
+      rateLimitPerMinute: z.coerce.number().int().nonnegative().default(20),
+      maxMessageChars: z.coerce.number().int().positive().default(8_000),
+      sessionIdleMinutes: z.coerce.number().int().positive().default(120),
+      maxSessions: z.coerce.number().int().positive().default(100),
     })
     .superRefine((value, ctx) => {
       if (value.enabled && (!value.clientId || !value.clientSecret)) {
@@ -70,6 +74,12 @@ export const appConfigSchema = z.object({
     keychainService: z.string().min(1).default("com.myassistant.vault"),
     keychainAccount: z.string().min(1).default("default"),
     autoLockMinutes: z.coerce.number().int().positive().default(15),
+  }),
+  daemon: z.object({
+    enabled: envBoolean.default(false),
+    socketPath: z.string().min(1).default("./data/assistant.sock"),
+    localSessionDir: z.string().min(1).default("./data/local-sessions"),
+    localSessionIdleMinutes: z.coerce.number().int().positive().default(120),
   }),
   tasks: z
     .object({
@@ -122,6 +132,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       clientId: clean(env.DINGTALK_CLIENT_ID),
       clientSecret: clean(env.DINGTALK_CLIENT_SECRET),
       robotCode: clean(env.DINGTALK_ROBOT_CODE),
+      rateLimitPerMinute: clean(env.DINGTALK_RATE_LIMIT_PER_MINUTE),
+      maxMessageChars: clean(env.DINGTALK_MAX_MESSAGE_CHARS),
+      sessionIdleMinutes: clean(env.DINGTALK_SESSION_IDLE_MINUTES),
+      maxSessions: clean(env.DINGTALK_MAX_SESSIONS),
     },
     rag: {
       enabled: clean(env.RAG_ENABLED),
@@ -140,6 +154,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       keychainService: clean(env.VAULT_KEYCHAIN_SERVICE),
       keychainAccount: clean(env.VAULT_KEYCHAIN_ACCOUNT),
       autoLockMinutes: clean(env.VAULT_AUTO_LOCK_MINUTES),
+    },
+    daemon: {
+      enabled: clean(env.DAEMON_ENABLED),
+      socketPath: clean(env.DAEMON_SOCKET_PATH),
+      localSessionDir: clean(env.DAEMON_LOCAL_SESSION_DIR),
+      localSessionIdleMinutes: clean(env.DAEMON_LOCAL_SESSION_IDLE_MINUTES),
     },
     tasks: {
       enabled: clean(env.TASKS_ENABLED),

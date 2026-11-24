@@ -12,6 +12,7 @@ class TestExecutor implements TaskExecutor {
   readonly runs: string[] = [];
   delayMs = 10;
   blockAll = false;
+  ignoreAbort = false;
   private readonly blockers = new Map<string, Promise<string>>();
   private readonly blocked = new Set<string>();
   private readonly resolvers = new Map<string, (value: string) => void>();
@@ -43,6 +44,9 @@ class TestExecutor implements TaskExecutor {
     this.maxActive = Math.max(this.maxActive, this.active);
     try {
       if (this.blockAll || this.blocked.has(task.id)) {
+        if (this.ignoreAbort) {
+          return await this.ensureBlocker(task.id);
+        }
         return await Promise.race([
           this.ensureBlocker(task.id),
           new Promise<string>((_, reject) => {
@@ -184,6 +188,32 @@ describe("TaskManager", () => {
     expect(await manager.cancel(id)).toBe(true);
     const result = await manager.poll(id);
     expect(result.status).toBe("cancelled");
+    await manager.close();
+  });
+
+  it("does not overwrite a cancelled task when the executor finishes later", async () => {
+    const executor = new TestExecutor();
+    executor.blockAll = true;
+    executor.ignoreAbort = true;
+    const manager = new TaskManager({
+      store: new JsonTaskStore(tempTaskPath()),
+      executor,
+      backend: "local",
+    });
+    await manager.init();
+
+    const id = await manager.delegate({ description: "slow and stubborn" });
+    await waitFor(async () => {
+      const task = await manager.get(id);
+      return task?.status === "running" ? task : undefined;
+    });
+    expect(await manager.cancel(id)).toBe(true);
+    executor.release(id, "late output");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const result = await manager.poll(id);
+    expect(result.status).toBe("cancelled");
+    expect(result.output).toBeUndefined();
     await manager.close();
   });
 

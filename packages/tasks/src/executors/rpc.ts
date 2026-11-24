@@ -23,13 +23,19 @@ const PROVIDER_API_KEY_ENV: Record<string, string> = {
   cerebras: "CEREBRAS_API_KEY",
   xai: "XAI_API_KEY",
   openrouter: "OPENROUTER_API_KEY",
+  "vercel-ai-gateway": "AI_GATEWAY_API_KEY",
   mistral: "MISTRAL_API_KEY",
   moonshotai: "MOONSHOT_API_KEY",
-  moonshotai_cn: "MOONSHOT_API_KEY",
+  "moonshotai-cn": "MOONSHOT_API_KEY",
   minimax: "MINIMAX_API_KEY",
+  "minimax-cn": "MINIMAX_CN_API_KEY",
   fireworks: "FIREWORKS_API_KEY",
   together: "TOGETHER_API_KEY",
   zai: "ZAI_API_KEY",
+  "zai-coding-cn": "ZAI_CODING_CN_API_KEY",
+  "kimi-coding": "KIMI_API_KEY",
+  opencode: "OPENCODE_API_KEY",
+  "opencode-go": "OPENCODE_API_KEY",
 };
 
 function resolveCliPath(explicit?: string): string {

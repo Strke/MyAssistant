@@ -8,6 +8,7 @@ describe("describeRuntime", () => {
     const summary = describeRuntime(config);
     expect(summary.model).toBe("anthropic/claude-sonnet-4-6");
     expect(summary.rag).toBe("disabled");
+    expect(summary.daemon).toBe("disabled");
     expect(JSON.stringify(summary)).not.toContain("super-secret");
   });
 });

@@ -58,6 +58,7 @@ export class TaskManager implements TaskService {
   private readonly listeners = new Set<TaskUpdateListener>();
   private readonly queue: string[] = [];
   private readonly running = new Map<string, RunningTask>();
+  private readonly cancelled = new Set<string>();
   private initialization: Promise<void> | undefined;
   private pumping = false;
   private pumpRequested = false;
@@ -118,6 +119,15 @@ export class TaskManager implements TaskService {
     };
 
     await this.store.save(task);
+    if (this.closed) {
+      task.status = "cancelled";
+      task.error = "Cancelled because the assistant is shutting down.";
+      task.finishedAt = this.now();
+      task.updatedAt = task.finishedAt;
+      this.cancelled.add(task.id);
+      await this.saveQuietly(task);
+      throw new Error("Task manager is shutting down.");
+    }
     this.emit(task, "pending");
     this.queue.push(task.id);
     this.pump();
@@ -140,6 +150,7 @@ export class TaskManager implements TaskService {
       return false;
     }
 
+    this.cancelled.add(taskId);
     if (task.status === "pending") {
       const index = this.queue.indexOf(taskId);
       if (index >= 0) {
@@ -215,12 +226,26 @@ export class TaskManager implements TaskService {
       task.error = "Cancelled because the assistant is shutting down.";
       task.finishedAt = this.now();
       task.updatedAt = task.finishedAt;
+      this.cancelled.add(taskId);
       await this.save(task);
       this.emit(task, previous);
     }
     this.queue.length = 0;
 
-    for (const running of this.running.values()) {
+    for (const [taskId, running] of this.running) {
+      const task = this.store.get(taskId);
+      if (task?.status !== "running") {
+        running.controller.abort(new Error("Task manager shutting down."));
+        continue;
+      }
+      this.cancelled.add(taskId);
+      const previous = task.status;
+      task.status = "cancelled";
+      task.error = "Cancelled because the assistant is shutting down.";
+      task.finishedAt = this.now();
+      task.updatedAt = task.finishedAt;
+      await this.save(task);
+      this.emit(task, previous);
       running.controller.abort(new Error("Task manager shutting down."));
     }
 
@@ -305,6 +330,20 @@ export class TaskManager implements TaskService {
           this.emit(task, previous);
           continue;
         }
+        if (this.closed) {
+          task.status = "cancelled";
+          task.error = "Cancelled because the assistant is shutting down.";
+          task.finishedAt = this.now();
+          task.updatedAt = task.finishedAt;
+          this.cancelled.add(task.id);
+          await this.saveQuietly(task);
+          break;
+        }
+
+        if (this.cancelled.has(task.id) || this.store.get(task.id)?.status === "cancelled") {
+          continue;
+        }
+
         this.emit(task, previous);
 
         const running: RunningTask = {
@@ -339,7 +378,7 @@ export class TaskManager implements TaskService {
 
     try {
       const output = await this.executor.run(task, running.controller.signal);
-      if (task.status === "cancelled") {
+      if (this.cancelled.has(task.id) || task.status === "cancelled") {
         return;
       }
       if (running.timedOut) {
@@ -351,7 +390,7 @@ export class TaskManager implements TaskService {
       task.finishedAt = this.now();
       task.updatedAt = task.finishedAt;
     } catch (error) {
-      if (task.status === "cancelled") {
+      if (this.cancelled.has(task.id) || task.status === "cancelled") {
         return;
       }
       task.status = "failed";
