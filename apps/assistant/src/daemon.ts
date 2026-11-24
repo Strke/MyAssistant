@@ -1,15 +1,17 @@
 import type { AppConfig } from "@myassistant/config";
 import { describeRuntime, type Logger, type ToolDefinition } from "@myassistant/core";
-import type { ChatMessageRecord } from "@myassistant/rag";
+import type { ChatMessageRecord, RagStore } from "@myassistant/rag";
 import { type AgentTaskStatus, createTaskTools, type TaskManager } from "@myassistant/tasks";
 import { createControlServer } from "./control-server";
 import { createDingTalkService, type DingTalkService } from "./dingtalk-service";
 import { createLocalChatService } from "./local-chat";
+import { createReviewServer, type ReviewServer } from "./review-server";
 
 export interface DaemonOptions {
   config: AppConfig;
   customTools: ToolDefinition[];
   taskManager?: TaskManager;
+  ragStore?: RagStore;
   onMessage?: (record: ChatMessageRecord) => Promise<void>;
   logger: Logger;
 }
@@ -49,6 +51,19 @@ export async function runDaemon(options: DaemonOptions): Promise<void> {
       onMessage: options.onMessage,
       logger,
     });
+  }
+
+  let review: ReviewServer | undefined;
+  if (config.review.enabled) {
+    if (!options.ragStore) {
+      logger.warn("review server is enabled but RAG is unavailable; review server not started");
+    } else {
+      review = await createReviewServer({
+        config,
+        store: options.ragStore,
+        logger,
+      });
+    }
   }
 
   let resolveShutdown: () => void = () => undefined;
@@ -122,8 +137,13 @@ export async function runDaemon(options: DaemonOptions): Promise<void> {
   try {
     await control.start();
     await dingtalk?.start();
+    await review?.start();
     logger.info(
-      { socketPath: config.daemon.socketPath, dingtalk: config.dingtalk.enabled },
+      {
+        socketPath: config.daemon.socketPath,
+        dingtalk: config.dingtalk.enabled,
+        review: config.review.enabled,
+      },
       "daemon ready",
     );
     await shutdownRequested;
@@ -131,6 +151,7 @@ export async function runDaemon(options: DaemonOptions): Promise<void> {
     process.off("SIGINT", onSignal);
     process.off("SIGTERM", onSignal);
     clearInterval(sweepTimer);
+    await review?.stop();
     await dingtalk?.stop();
     await control.stop();
     localChat.dispose();

@@ -4,6 +4,15 @@ export { createLogger, sanitizeForLog, serializeError } from "./logging";
 export { DEFAULT_ASSISTANT_SYSTEM_PROMPT } from "./prompt";
 export type { ConversationRecord, ReplOptions } from "./repl";
 export { runRepl } from "./repl";
+export type {
+  ReviewBlackboardItem,
+  ReviewDecision,
+  ReviewEngine,
+  ReviewEngineOptions,
+  ReviewInput,
+  ReviewMemoryHit,
+} from "./review";
+export { createReviewEngine } from "./review";
 export type { AssistantRuntime, RuntimeSummary } from "./runtime";
 export { describeRuntime } from "./runtime";
 export type { AssistantSession, CreateAssistantSessionOptions } from "./session";

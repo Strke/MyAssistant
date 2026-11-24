@@ -103,6 +103,15 @@ export const appConfigSchema = z.object({
     pageSize: z.coerce.number().int().positive().max(500).default(100),
     maxItemsPerSync: z.coerce.number().int().positive().default(5_000),
   }),
+  review: z.object({
+    enabled: envBoolean.default(false),
+    host: z.string().min(1).default("127.0.0.1"),
+    port: z.coerce.number().int().positive().max(65_535).default(8788),
+    token: optionalString,
+    topK: z.coerce.number().int().positive().max(50).default(8),
+    maxContentChars: z.coerce.number().int().positive().default(8_000),
+    timeoutSeconds: z.coerce.number().int().positive().default(90),
+  }),
   tasks: z
     .object({
       enabled: envBoolean.default(true),
@@ -194,6 +203,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       requestTimeoutSeconds: clean(env.DWS_REQUEST_TIMEOUT_SECONDS),
       pageSize: clean(env.DWS_PAGE_SIZE),
       maxItemsPerSync: clean(env.DWS_MAX_ITEMS_PER_SYNC),
+    },
+    review: {
+      enabled: clean(env.REVIEW_ENABLED),
+      host: clean(env.REVIEW_HOST),
+      port: clean(env.REVIEW_PORT),
+      token: clean(env.REVIEW_TOKEN),
+      topK: clean(env.REVIEW_TOP_K),
+      maxContentChars: clean(env.REVIEW_MAX_CONTENT_CHARS),
+      timeoutSeconds: clean(env.REVIEW_TIMEOUT_SECONDS),
     },
     tasks: {
       enabled: clean(env.TASKS_ENABLED),

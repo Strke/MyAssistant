@@ -9,6 +9,7 @@ export default defineConfig({
     "dingtalk-check": "apps/assistant/src/dingtalk-check.ts",
     "model-check": "apps/assistant/src/model-check.ts",
     "dws-gateway": "apps/dws-gateway/src/index.ts",
+    "dws-watch": "apps/dws-watch/src/index.ts",
   },
   outDir: "dist",
   format: ["esm"],

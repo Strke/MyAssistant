@@ -156,6 +156,17 @@ DWS_HISTORY_GROUPS=cid1,cid2
 
 当前只开放只读导入，不开放发送。历史消息使用 `openMessageId` 去重，DWS 返回不完整结果时不会把该时间范围标记为已同步。
 
+### 实时消息审阅（只读）
+
+B 机还可以运行 `dws-watch`，监听指定群/单聊的新消息，推送到 A 做 RAG 检索和模型判断，并把判断结果写入 B 的 `~/dws-watch/reviews.jsonl`。
+
+```bash
+npm run dws-watch          # 前台调试
+npm run dws-watch:start    # 运行构建产物
+```
+
+当前只记录、不自动回复。部署和日志格式见 [`docs/DWS_REVIEW.md`](docs/DWS_REVIEW.md)。
+
 RAG 会记录每轮对话并提供 `memory_search` 工具。默认使用 OpenAI 兼容的 embedding 接口，需配置 `RAG_EMBEDDING_API_KEY`（可选 `RAG_EMBEDDING_BASE_URL`）；本地调试可设 `RAG_EMBEDDING_PROVIDER=hash`。未配置凭证时 RAG 会自动跳过。
 
 本地 embedding 可用 Ollama + `bge-m3`（1024 维，中文效果较好）：
@@ -249,6 +260,7 @@ launchd 会在崩溃后自动重启，日志写入 `data/logs/`。运行 `daemon
 | `npm run dingtalk:history`   | 手动导入指定群历史消息      |
 | `npm run dingtalk:sync`      | 按配置增量同步历史消息      |
 | `npm run gateway`            | 前台启动 DWS 网关（B 机）   |
+| `npm run dws-watch`          | 监听钉钉新消息（B 机）      |
 | `npm run login`              | 登录订阅账号或保存模型凭证  |
 | `npm run model:check`        | 查看当前可用的模型与账号    |
 | `npm run daemon:install`     | 安装 launchd 自启项         |
@@ -274,8 +286,10 @@ packages/
   channel-dingtalk/      # 钉钉 Stream 通道
   dingtalk-dws/          # DWS 网关客户端与历史消息导入
   tasks/                 # 任务外派（AgentDispatcher）
+apps/dws-watch/          # B 机实时消息监听（只读审阅）
 docs/PLAN.md             # 架构与里程碑
 docs/DWS_GATEWAY.md      # DWS 历史导入部署说明
+docs/DWS_REVIEW.md       # DWS 实时审阅部署说明
 ```
 
 ## 当前进度
@@ -288,6 +302,7 @@ docs/DWS_GATEWAY.md      # DWS 历史导入部署说明
 - [x] M5 任务外派
 - [x] M6 加固
 - [x] DWS 历史聊天导入
+- [x] DWS 实时消息审阅（只读，B 机 JSONL 记录）
 
 ## 安全
 

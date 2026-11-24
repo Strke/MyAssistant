@@ -75,4 +75,17 @@ describe("loadConfig", () => {
     expect(config.dws.pageSize).toBe(50);
     expect(config.dws.maxItemsPerSync).toBe(1000);
   });
+
+  it("parses review server configuration", () => {
+    const config = loadConfig({
+      REVIEW_ENABLED: "true",
+      REVIEW_PORT: "9999",
+      REVIEW_TOP_K: "3",
+      REVIEW_TOKEN: "review-token",
+    });
+    expect(config.review.enabled).toBe(true);
+    expect(config.review.port).toBe(9999);
+    expect(config.review.topK).toBe(3);
+    expect(config.review.token).toBe("review-token");
+  });
 });

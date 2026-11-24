@@ -21,6 +21,8 @@
     "dingtalk:dws-check": "tsx apps/assistant/src/dingtalk-dws-check.ts",
     "dingtalk:history": "tsx apps/assistant/src/dingtalk-history.ts",
     "dingtalk:sync": "tsx apps/assistant/src/dingtalk-sync.ts",
+    "dws-watch": "tsx apps/dws-watch/src/index.ts",
+    "dws-watch:start": "node dist/dws-watch.js",
     "model:check": "tsx apps/assistant/src/model-check.ts",
     "gateway": "tsx apps/dws-gateway/src/index.ts",
     "gateway:start": "node dist/dws-gateway.js",

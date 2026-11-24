@@ -84,6 +84,7 @@ try {
       config,
       customTools,
       taskManager: activeTaskManager,
+      ragStore,
       onMessage,
       logger,
     });
