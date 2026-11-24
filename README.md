@@ -24,7 +24,9 @@ cp .env.example .env
 npm run dev
 ```
 
-`npm run dev` 目前会加载配置并打印脱敏后的运行摘要（M0 脚手架）。
+`npm run dev` 会启动 REPL（当前为 M1 核心对话）。首次使用需要配置模型凭证：填入 `.env` 的 `MODEL_API_KEY`，或在本机运行过一次 `pi` 并用 `/login` 登录。
+
+REPL 内置命令：`/help`、`/status`、`/new`、`/exit`。会话会自动持久化。
 
 ## 常用脚本
 
@@ -53,7 +55,7 @@ docs/PLAN.md             # 架构与里程碑
 ## 当前进度
 
 - [x] M0 脚手架
-- [ ] M1 核心对话
+- [x] M1 核心对话
 - [ ] M2 RAG
 - [ ] M3 Vault
 - [ ] M4 钉钉

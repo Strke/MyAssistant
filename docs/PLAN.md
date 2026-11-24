@@ -106,7 +106,7 @@ packages/
 ## 7. 当前进度
 
 - [x] M0 脚手架（本文件 + workspace + 工具链 + config + 模块骨架）
-- [ ] M1 核心对话
+- [x] M1 核心对话（pi SDK 会话持久化 + REPL + 流式输出）
 - [ ] M2 RAG
 - [ ] M3 Vault
 - [ ] M4 钉钉
