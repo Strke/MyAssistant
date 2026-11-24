@@ -150,6 +150,24 @@ DWS_HISTORY_GROUPS=cid1,cid2
 
 RAG 会记录每轮对话并提供 `memory_search` 工具。默认使用 OpenAI 兼容的 embedding 接口，需配置 `RAG_EMBEDDING_API_KEY`（可选 `RAG_EMBEDDING_BASE_URL`）；本地调试可设 `RAG_EMBEDDING_PROVIDER=hash`。未配置凭证时 RAG 会自动跳过。
 
+本地 embedding 可用 Ollama + `bge-m3`（1024 维，中文效果较好）：
+
+```bash
+brew install ollama
+brew services start ollama
+ollama pull bge-m3
+```
+
+```bash
+RAG_EMBEDDING_PROVIDER=openai
+RAG_EMBEDDING_MODEL=bge-m3
+RAG_EMBEDDING_DIMENSIONS=1024
+RAG_EMBEDDING_BASE_URL=http://127.0.0.1:11434/v1
+RAG_EMBEDDING_API_KEY=ollama
+```
+
+这里的 `openai` 表示 OpenAI 兼容接口，不是必须使用 OpenAI 云服务。
+
 密钥库使用本地加密文件（AES-256-GCM，条目级 nonce + AAD），主密钥默认保存在 macOS Keychain，访问会写入审计日志（不记录值）。可用命令管理：
 
 ```bash
