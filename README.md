@@ -67,6 +67,14 @@ MODEL_ID=claude-sonnet-4-6
 MODEL_API_KEY=sk-...
 ```
 
+如果使用 OpenCode Go 订阅，从 [OpenCode Console](https://opencode.ai/console) 复制 Go API Key：
+
+```bash
+MODEL_PROVIDER=opencode-go
+MODEL_ID=deepseek-v4.1-flash
+MODEL_API_KEY=你的OpenCodeGoAPIKey
+```
+
 然后运行 `npm run model:check`，确认 `✅ configured model is available`。不同厂商的 Key 也可以放在对应环境变量里（如 `ANTHROPIC_API_KEY`、`OPENAI_API_KEY`），不一定要写 `MODEL_API_KEY`。
 
 #### 3. 本地或自建 OpenAI 兼容端点
