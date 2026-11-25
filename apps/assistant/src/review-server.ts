@@ -11,6 +11,7 @@ import { createDwsGatewayClient } from "@myassistant/dingtalk-dws";
 import type { ChatMessageRecord, MemoryHit, RagStore } from "@myassistant/rag";
 import { BlackboardStore } from "./blackboard";
 import { ConversationSummaryStore } from "./conversation-summary";
+import { shouldAutoReply } from "./reply-policy";
 
 const MAX_BODY_BYTES = 128 * 1024;
 
@@ -314,7 +315,19 @@ export async function createReviewServer(options: ReviewServerOptions): Promise<
       }
     }
 
-    if (config.review.autoReply && decision.related && gateway) {
+    const replyAllowed = shouldAutoReply(
+      {
+        chatType: event.chatType,
+        conversationId: event.conversationId,
+        senderOpenDingTalkId: event.senderOpenDingTalkId,
+      },
+      {
+        enabled: config.review.autoReply,
+        allowlist: config.review.autoReplyDms,
+      },
+    );
+
+    if (replyAllowed && decision.related && gateway) {
       const defaultReply =
         decision.blackboardAction === "add"
           ? "收到，我先记到黑板上了。"
@@ -369,6 +382,7 @@ export async function createReviewServer(options: ReviewServerOptions): Promise<
         confidence: decision.confidence,
         blackboardAction: decision.blackboardAction,
         blackboardPushed: actions.pushed,
+        autoReplyAllowed: replyAllowed,
         replied: actions.reply?.sent,
         summaryUsedLength: summaryUsed.length,
         summaryLength: conversationSummary.length,

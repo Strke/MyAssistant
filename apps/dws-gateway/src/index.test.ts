@@ -6,6 +6,7 @@ import {
   createGatewayServer,
   type DwsRunner,
   type GatewayConfig,
+  loadGatewayConfig,
 } from "./index";
 
 const servers: Server[] = [];
@@ -19,6 +20,7 @@ const config: GatewayConfig = {
   sendGroups: new Set(["cid-good"]),
   replyGroups: new Set(["cid-good"]),
   replyDms: true,
+  replyDmOpenDingTalkIds: new Set(["u1"]),
   requestTimeoutMs: 5_000,
   maxItems: 1_000,
   maxConcurrent: 2,
@@ -115,8 +117,15 @@ const runner: DwsRunner = async (args) => {
   });
 };
 
-async function start(run: DwsRunner = runner): Promise<{ server: Server; baseUrl: string }> {
-  const server = createGatewayServer({ config, runner: run, logger: () => undefined });
+async function start(
+  run: DwsRunner = runner,
+  overrides: Partial<GatewayConfig> = {},
+): Promise<{ server: Server; baseUrl: string }> {
+  const server = createGatewayServer({
+    config: { ...config, ...overrides },
+    runner: run,
+    logger: () => undefined,
+  });
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address() as AddressInfo;
@@ -284,6 +293,47 @@ describe("dws gateway", () => {
       }),
     });
     expect(directReply.status).toBe(200);
+  });
+
+  it("replies only to allowlisted direct senders when replyDms is off", async () => {
+    const { baseUrl } = await start(runner, {
+      replyDms: false,
+      replyDmOpenDingTalkIds: new Set(["u-allowed"]),
+    });
+
+    const allowed = await fetch(`${baseUrl}/v1/chat/reply`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({
+        conversationId: "cid-dm",
+        messageId: "msg-allowed",
+        chatType: "direct",
+        senderOpenDingTalkId: "u-allowed",
+        text: "收到",
+      }),
+    });
+    expect(allowed.status).toBe(200);
+
+    const denied = await fetch(`${baseUrl}/v1/chat/reply`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({
+        conversationId: "cid-dm",
+        messageId: "msg-denied",
+        chatType: "direct",
+        senderOpenDingTalkId: "u-other",
+        text: "收到",
+      }),
+    });
+    expect(denied.status).toBe(403);
+  });
+
+  it("parses the selective direct reply allowlist", () => {
+    const parsed = loadGatewayConfig({
+      DWS_GATEWAY_TOKEN: "test-token",
+      DWS_REPLY_DM_OPEN_DINGTALK_IDS: "u1, u2",
+    });
+    expect(parsed.replyDmOpenDingTalkIds).toEqual(new Set(["u1", "u2"]));
   });
 
   it("searches conversations", async () => {

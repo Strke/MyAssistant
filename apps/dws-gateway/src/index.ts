@@ -16,6 +16,7 @@ export interface GatewayConfig {
   sendGroups: Set<string>;
   replyGroups: Set<string>;
   replyDms: boolean;
+  replyDmOpenDingTalkIds: Set<string>;
   selfOpenDingTalkId?: string;
   requestTimeoutMs: number;
   maxItems: number;
@@ -341,6 +342,12 @@ export function loadGatewayConfig(env: NodeJS.ProcessEnv = process.env): Gateway
   const replyDms = ["1", "true", "all", "yes"].includes(
     (env.DWS_REPLY_DMS ?? "").trim().toLowerCase(),
   );
+  const replyDmOpenDingTalkIds = new Set(
+    (env.DWS_REPLY_DM_OPEN_DINGTALK_IDS ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
   const port = Number(env.DWS_GATEWAY_PORT ?? 8787);
   if (!Number.isInteger(port) || port <= 0 || port > 65535) {
     throw new Error("DWS_GATEWAY_PORT must be a valid port.");
@@ -354,6 +361,7 @@ export function loadGatewayConfig(env: NodeJS.ProcessEnv = process.env): Gateway
     sendGroups,
     replyGroups,
     replyDms,
+    replyDmOpenDingTalkIds,
     selfOpenDingTalkId: env.DWS_SELF_OPEN_DINGTALK_ID?.trim() || undefined,
     requestTimeoutMs: Math.max(5, Number(env.DWS_REQUEST_TIMEOUT_SECONDS ?? 120)) * 1_000,
     maxItems: Math.max(1, Number(env.DWS_MAX_ITEMS ?? 5_000)),
@@ -556,8 +564,13 @@ export function createGatewayServer(options: GatewayOptions): Server {
         (error as Error & { status?: number }).status = 403;
         throw error;
       }
-    } else if (!config.replyDms) {
-      const error = new Error("Direct-message replies are disabled; set DWS_REPLY_DMS=all.");
+    } else if (
+      !config.replyDms &&
+      !(senderOpenDingTalkId && config.replyDmOpenDingTalkIds.has(senderOpenDingTalkId))
+    ) {
+      const error = new Error(
+        "Direct-message replies are disabled; set DWS_REPLY_DMS=all or add the sender to DWS_REPLY_DM_OPEN_DINGTALK_IDS.",
+      );
       (error as Error & { status?: number }).status = 403;
       throw error;
     }

@@ -1,14 +1,15 @@
-# DWS 实时审阅（只读）
+# DWS 实时审阅（单聊 + 白名单回复）
 
 这条链路监听 B 机当前钉钉账号可见的单聊消息，把消息送到 A 机做 RAG 检索和模型判断，并把原始消息 + 判断结果写到 B 机的 JSONL 文件。
 
-当前为只读模式，收到消息后只会：
+当前只监听单聊，并且只对白名单中的单聊自动回复。收到消息后会：
 
 - 更新 A 机的本地黑板
 - 更新该会话的滚动摘要
 - 写 B 机的审阅日志
+- 仅对 A、B 两端白名单都允许的单聊回复原消息
 
-不会自动回复，也不会把黑板推送到任何群。
+不会把黑板推送到任何群，也不会回复群消息。
 
 黑板只保留未完成事项；已完成事项只保留最新 5 项。
 
@@ -31,8 +32,8 @@ A 机
     2. 读取该会话持久化的滚动摘要；首次没有摘要时，用最近 15 条消息生成初始摘要
     3. bge-m3 检索长期历史（topK 8）
     4. deepseek-v4.1-flash 结合“滚动摘要 + 长期检索 + 黑板”判断
-    5. 更新本地黑板（不推送、不回复）
-    6. 把当前消息合并进滚动摘要并持久化
+    5. 更新本地黑板；仅对白名单单聊自动回复，不推送黑板
+    6. 把当前消息和实际回复（如有）合并进滚动摘要并持久化
     7. 返回 decision + actions + 更新后的 conversationSummary
         │
         ▼
@@ -100,7 +101,8 @@ REVIEW_RECENT_MESSAGES=15
 REVIEW_SUMMARY_PATH=./data/conversation-summaries.json
 REVIEW_MAX_CONTENT_CHARS=8000
 REVIEW_TIMEOUT_SECONDS=90
-REVIEW_AUTO_REPLY=false
+REVIEW_AUTO_REPLY=true
+REVIEW_AUTO_REPLY_DMS=白名单openDingTalkId或conversationId
 BLACKBOARD_ENABLED=true
 BLACKBOARD_PATH=./data/blackboard.json
 BLACKBOARD_GROUP_ID=
@@ -119,28 +121,33 @@ tailscale serve --bg 8788
 curl http://127.0.0.1:8788/health
 ```
 
-## 发送与回复（当前关闭）
+## 发送与回复（白名单单聊）
 
-当前 A 和 B 都不发送任何钉钉消息：
+A 端先按 `REVIEW_AUTO_REPLY_DMS` 过滤，B 端再用 `DWS_REPLY_DM_OPEN_DINGTALK_IDS` 做第二道校验。只有两边都允许的单聊才会回复。
+
+当前配置：
 
 ```bash
 # A
-REVIEW_AUTO_REPLY=false
+REVIEW_AUTO_REPLY=true
+REVIEW_AUTO_REPLY_DMS=林雨涛的openDingTalkId
 BLACKBOARD_GROUP_ID=
 
 # B
 DWS_SEND_GROUPS=
 DWS_REPLY_GROUPS=
 DWS_REPLY_DMS=
+DWS_REPLY_DM_OPEN_DINGTALK_IDS=林雨涛的openDingTalkId
 ```
 
-因此不会自动回复单聊或群，也不会推送黑板。
+`REVIEW_AUTO_REPLY_DMS` 支持 `openDingTalkId`、`conversationId` 或 `all`。`all` 表示所有单聊。
+`DWS_REPLY_DMS=all` 表示 B 端允许所有单聊；留空时只允许 `DWS_REPLY_DM_OPEN_DINGTALK_IDS` 中的发送者。
 
-以后恢复单聊自动回复需要同时修改：
+当前黑板推送仍然关闭。要恢复所有单聊自动回复：
 
 ```bash
 # A
-REVIEW_AUTO_REPLY=true
+REVIEW_AUTO_REPLY_DMS=all
 # B
 DWS_REPLY_DMS=all
 ```
@@ -182,9 +189,9 @@ data/conversation-summaries.json
 1. 新消息写入 RAG。
 2. 读取该会话已有摘要。首次没有摘要时，取同一会话最近 15 条消息（不含当前消息）生成初始摘要。
 3. 用当前消息做长期 RAG 检索，结合滚动摘要和黑板进行判断。
-4. 更新本地黑板；只读模式下不回复、不推送。
+4. 更新本地黑板；仅对白名单单聊回复，不推送黑板。
 5. 把当前消息（以及实际发出的回复，如果有）交给模型，合并进旧摘要，覆盖保存。
-6. 自己发送的消息仍写入 RAG，但不会触发判断、回复、黑板动作或摘要更新；只读模式下没有自动回复，因此只合并对方消息。
+6. 自己发送的消息仍写入 RAG，但不会触发判断、回复、黑板动作或摘要更新；非白名单会话没有自动回复，因此只合并对方消息。
 
 这样摘要会随对话持续滚动，不需要每次把最近 15 条重新压缩；`REVIEW_RECENT_MESSAGES` 只用于首次初始化摘要。
 
@@ -245,7 +252,7 @@ A 处理失败时也会写一条记录，带 `error` 字段，方便排查。
 
 ## 当前边界
 
-- 当前只读：不自动回复、不发送群消息、不推送黑板；消息仍进入 RAG、更新滚动摘要、更新本地黑板并写审阅日志
+- 当前仅对白名单单聊自动回复；其他单聊和所有群不回复；黑板只本地更新、不推送；消息仍进入 RAG、更新滚动摘要并写审阅日志
 - 当前只监听单聊；群聊默认关闭，需要在 `DWS_WATCH_GROUPS` 显式加回并重启 watcher
 - 单聊由 `DWS_WATCH_DMS=all` 开启
 - 消息会进入 A 的 RAG，模型判断基于检索到的历史

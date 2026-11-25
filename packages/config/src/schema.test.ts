@@ -82,12 +82,14 @@ describe("loadConfig", () => {
       REVIEW_PORT: "9999",
       REVIEW_TOP_K: "3",
       REVIEW_TOKEN: "review-token",
+      REVIEW_AUTO_REPLY_DMS: "open-1, cid-2",
     });
     expect(config.review.enabled).toBe(true);
     expect(config.review.port).toBe(9999);
     expect(config.review.topK).toBe(3);
     expect(config.review.recentMessages).toBe(15);
     expect(config.review.summaryPath).toBe("./data/conversation-summaries.json");
+    expect(config.review.autoReplyDms).toEqual(["open-1", "cid-2"]);
     expect(config.review.token).toBe("review-token");
   });
 });
