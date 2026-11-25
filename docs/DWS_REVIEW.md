@@ -2,11 +2,13 @@
 
 这条链路监听 B 机当前钉钉账号可见的单聊消息，把消息送到 A 机做 RAG 检索和模型判断，并把原始消息 + 判断结果写到 B 机的 JSONL 文件。
 
-在判断为相关时，会：
+当前为只读模式，收到消息后只会：
 
-- 更新 A 机的黑板
-- 将整块黑板推送到 B 的「黑板推送」群
-- 在单聊中自动回复原消息
+- 更新 A 机的本地黑板
+- 更新该会话的滚动摘要
+- 写 B 机的审阅日志
+
+不会自动回复，也不会把黑板推送到任何群。
 
 黑板只保留未完成事项；已完成事项只保留最新 5 项。
 
@@ -29,8 +31,8 @@ A 机
     2. 读取该会话持久化的滚动摘要；首次没有摘要时，用最近 15 条消息生成初始摘要
     3. bge-m3 检索长期历史（topK 8）
     4. deepseek-v4.1-flash 结合“滚动摘要 + 长期检索 + 黑板”判断
-    5. 更新黑板、推送黑板群、自动回复
-    6. 把当前消息和实际回复合并进滚动摘要并持久化
+    5. 更新本地黑板（不推送、不回复）
+    6. 把当前消息合并进滚动摘要并持久化
     7. 返回 decision + actions + 更新后的 conversationSummary
         │
         ▼
@@ -98,10 +100,10 @@ REVIEW_RECENT_MESSAGES=15
 REVIEW_SUMMARY_PATH=./data/conversation-summaries.json
 REVIEW_MAX_CONTENT_CHARS=8000
 REVIEW_TIMEOUT_SECONDS=90
-REVIEW_AUTO_REPLY=true
+REVIEW_AUTO_REPLY=false
 BLACKBOARD_ENABLED=true
 BLACKBOARD_PATH=./data/blackboard.json
-BLACKBOARD_GROUP_ID=cidx7ygN7Xd06+ARqXKam58gA==
+BLACKBOARD_GROUP_ID=
 BLACKBOARD_MAX_COMPLETED=5
 ```
 
@@ -117,18 +119,42 @@ tailscale serve --bg 8788
 curl http://127.0.0.1:8788/health
 ```
 
-## 自动回复范围
+## 发送与回复（当前关闭）
 
-B 的 gateway 只允许：
+当前 A 和 B 都不发送任何钉钉消息：
 
 ```bash
+# A
+REVIEW_AUTO_REPLY=false
+BLACKBOARD_GROUP_ID=
+
+# B
+DWS_SEND_GROUPS=
 DWS_REPLY_GROUPS=
+DWS_REPLY_DMS=
+```
+
+因此不会自动回复单聊或群，也不会推送黑板。
+
+以后恢复单聊自动回复需要同时修改：
+
+```bash
+# A
+REVIEW_AUTO_REPLY=true
+# B
 DWS_REPLY_DMS=all
 ```
 
-因此当前自动回复只发生在单聊；群回复已关闭。回复使用 DWS 当前登录用户身份，默认带 AI 角标。
+恢复黑板推送需要：
 
-跨组织单聊在 DWS 中可能缺少跨组织数据授权，回复会失败并记录在 `actions.reply.error`。如确需回复跨组织会话，需要在 B 上按提示执行：
+```bash
+# A
+BLACKBOARD_GROUP_ID=cidx7ygN7Xd06+ARqXKam58gA==
+# B
+DWS_SEND_GROUPS=cidx7ygN7Xd06+ARqXKam58gA==
+```
+
+跨组织单聊在 DWS 中可能缺少跨组织数据授权，恢复回复后可能失败并记录在 `actions.reply.error`。如确需回复跨组织会话，需要在 B 上按提示执行：
 
 ```bash
 dws chat data-auth cross-org --all --grant-type timed --ttl 24h --format json
@@ -139,8 +165,9 @@ dws chat data-auth cross-org --all --grant-type timed --ttl 24h --format json
 - 未完成事项全部保留
 - 已完成事项只保留最新 5 项
 - 黑板文件：A 机 `data/blackboard.json`
-- 黑板群：`cidx7ygN7Xd06+ARqXKam58gA==`（「黑板推送」）
-- 只有黑板发生变化时才推送到群，避免刷屏
+- 当前 `BLACKBOARD_GROUP_ID` 留空，黑板只在本机更新，不推送
+- 以后恢复推送时使用：`cidx7ygN7Xd06+ARqXKam58gA==`（「黑板推送」）
+- 只有黑板发生变化时才推送，避免刷屏
 
 ## 滚动摘要
 
@@ -155,9 +182,9 @@ data/conversation-summaries.json
 1. 新消息写入 RAG。
 2. 读取该会话已有摘要。首次没有摘要时，取同一会话最近 15 条消息（不含当前消息）生成初始摘要。
 3. 用当前消息做长期 RAG 检索，结合滚动摘要和黑板进行判断。
-4. 执行黑板和自动回复动作。
-5. 把当前消息和实际发出的回复交给模型，合并进旧摘要，覆盖保存。
-6. 自己发送的消息仍写入 RAG，但不会触发判断、回复、黑板动作或摘要更新；自动回复的摘要由第 5 步合并。
+4. 更新本地黑板；只读模式下不回复、不推送。
+5. 把当前消息（以及实际发出的回复，如果有）交给模型，合并进旧摘要，覆盖保存。
+6. 自己发送的消息仍写入 RAG，但不会触发判断、回复、黑板动作或摘要更新；只读模式下没有自动回复，因此只合并对方消息。
 
 这样摘要会随对话持续滚动，不需要每次把最近 15 条重新压缩；`REVIEW_RECENT_MESSAGES` 只用于首次初始化摘要。
 
@@ -218,6 +245,7 @@ A 处理失败时也会写一条记录，带 `error` 字段，方便排查。
 
 ## 当前边界
 
+- 当前只读：不自动回复、不发送群消息、不推送黑板；消息仍进入 RAG、更新滚动摘要、更新本地黑板并写审阅日志
 - 当前只监听单聊；群聊默认关闭，需要在 `DWS_WATCH_GROUPS` 显式加回并重启 watcher
 - 单聊由 `DWS_WATCH_DMS=all` 开启
 - 消息会进入 A 的 RAG，模型判断基于检索到的历史
@@ -229,7 +257,7 @@ A 处理失败时也会写一条记录，带 `error` 字段，方便排查。
 
 ## 黑板推送群
 
-B 的 gateway 可以配置一个专门的推送群：
+当前未启用。以后需要恢复时，B 的 gateway 配置：
 
 ```bash
 DWS_SEND_GROUPS=cidx7ygN7Xd06+ARqXKam58gA==
