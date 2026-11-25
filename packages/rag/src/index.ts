@@ -5,4 +5,10 @@ export { createEmbedder } from "./embedder";
 export type { OpenRagStoreOptions } from "./store";
 export { openRagStore, SqliteRagStore } from "./store";
 export { createMemorySearchTool } from "./tool";
-export type { ChatMessageRecord, MemoryHit, MemorySearchOptions, RagStore } from "./types";
+export type {
+  ChatMessageRecord,
+  MemoryHit,
+  MemorySearchOptions,
+  RagStore,
+  RecentMessage,
+} from "./types";

@@ -85,6 +85,26 @@ describe("SqliteRagStore", () => {
     }
   });
 
+  it("returns recent messages in chronological order", async () => {
+    const store = openRagStore({ dbPath: ":memory:", embedder: hashEmbedder() });
+    try {
+      for (let index = 0; index < 6; index += 1) {
+        await store.addMessage({
+          id: `recent-${index}`,
+          conversationId: "c-recent",
+          role: "user",
+          channel: "dingtalk",
+          content: `message ${index}`,
+          createdAt: 1_000 + index,
+        });
+      }
+      const recent = await store.recentMessages("c-recent", 3);
+      expect(recent.map((item) => item.content)).toEqual(["message 3", "message 4", "message 5"]);
+    } finally {
+      await store.close();
+    }
+  });
+
   it("filters by conversation and timestamp", async () => {
     const store = openRagStore({ dbPath: ":memory:", embedder: hashEmbedder() });
     try {

@@ -26,10 +26,11 @@ B 机
 A 机
   assistant review server
     1. 消息写入 RAG
-    2. bge-m3 检索相关历史
-    3. deepseek-v4.1-flash 输出结构化判断
-    4. 更新黑板、推送黑板群、自动回复
-    5. 返回 decision + actions
+    2. 读取同一会话最近 15 条消息，调用模型压缩成短摘要
+    3. bge-m3 检索长期历史（topK 8）
+    4. deepseek-v4.1-flash 结合“最近 15 条摘要 + 长期检索 + 黑板”判断
+    5. 更新黑板、推送黑板群、自动回复
+    6. 返回 decision + actions + conversationSummary
         │
         ▼
 B 机
@@ -92,6 +93,7 @@ REVIEW_HOST=127.0.0.1
 REVIEW_PORT=8788
 REVIEW_TOKEN=随机长字符串
 REVIEW_TOP_K=8
+REVIEW_RECENT_MESSAGES=15
 REVIEW_MAX_CONTENT_CHARS=8000
 REVIEW_TIMEOUT_SECONDS=90
 REVIEW_AUTO_REPLY=true
@@ -138,6 +140,16 @@ dws chat data-auth cross-org --all --grant-type timed --ttl 24h --format json
 - 黑板群：`cidx7ygN7Xd06+ARqXKam58gA==`（「黑板推送」）
 - 只有黑板发生变化时才推送到群，避免刷屏
 
+## 最近上下文
+
+每条非本人消息进入判断前，会先取同一 `conversationId` 最近 15 条消息（不含当前消息），再调用模型压缩成短摘要。判断时使用：
+
+- 最近 15 条消息的摘要
+- 长期 RAG 语义检索 topK
+- 当前黑板事项
+
+这样既能保留长期历史，又不用把完整聊天记录塞进上下文。摘要会随每条新消息重新生成，并写入 B 的 `reviews.jsonl`。
+
 ## 审阅文件
 
 每条记录一行 JSON：
@@ -171,6 +183,7 @@ dws chat data-auth cross-org --all --grant-type timed --ttl 24h --format json
     "pushed": true,
     "reply": { "sent": true, "text": "收到，我先记到黑板上了。" }
   },
+  "conversationSummary": "最近 15 条消息的压缩摘要...",
   "duplicate": false,
   "durationMs": 6400
 }

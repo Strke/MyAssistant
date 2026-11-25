@@ -56,6 +56,7 @@ interface ReviewResponse {
   duplicate: boolean;
   decision?: ReviewDecision;
   actions?: ReviewActions;
+  conversationSummary?: string;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -182,6 +183,28 @@ export async function createReviewServer(options: ReviewServerOptions): Promise<
       return { duplicate: false, actions: { skipped: "self" } };
     }
 
+    let recentSummary = "";
+    try {
+      const recent =
+        (await store.recentMessages?.(record.conversationId, config.review.recentMessages + 1)) ??
+        [];
+      const prior = recent
+        .filter((message) => message.id !== record.id)
+        .slice(-config.review.recentMessages);
+      if (prior.length > 0) {
+        recentSummary = await engine.summarizeConversation(
+          prior.map((message) => ({
+            role: message.role,
+            sender: message.sender,
+            content: message.content,
+            createdAt: message.createdAt,
+          })),
+        );
+      }
+    } catch (error) {
+      logger?.warn({ err: error }, "conversation summarize failed; continuing without summary");
+    }
+
     let hits: MemoryHit[] = [];
     try {
       hits = await store.search(event.content, { topK: config.review.topK });
@@ -198,6 +221,7 @@ export async function createReviewServer(options: ReviewServerOptions): Promise<
       : undefined;
 
     const decision = await engine.judge({
+      conversationSummary: recentSummary,
       message: {
         content: event.content,
         sender: event.sender,
@@ -283,10 +307,11 @@ export async function createReviewServer(options: ReviewServerOptions): Promise<
         blackboardAction: decision.blackboardAction,
         blackboardPushed: actions.pushed,
         replied: actions.reply?.sent,
+        summaryLength: recentSummary.length,
       },
       "review decision",
     );
-    return { duplicate: false, decision, actions };
+    return { duplicate: false, decision, actions, conversationSummary: recentSummary };
   };
 
   let server: Server | undefined;

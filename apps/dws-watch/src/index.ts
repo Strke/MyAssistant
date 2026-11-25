@@ -36,6 +36,7 @@ interface ReviewLogEntry {
   message: EventMessage;
   decision?: unknown;
   actions?: unknown;
+  conversationSummary?: string;
   duplicate?: boolean;
   error?: string;
   durationMs: number;
@@ -202,6 +203,7 @@ async function postReview(
   duplicate: boolean;
   decision?: unknown;
   actions?: unknown;
+  conversationSummary?: string;
 }> {
   const response = await fetch(`${config.reviewUrl}/v1/dingtalk/review`, {
     method: "POST",
@@ -240,6 +242,7 @@ async function postReview(
     duplicate: body?.duplicate === true,
     decision: body?.decision,
     actions: body?.actions,
+    conversationSummary: stringValue(body?.conversationSummary),
   };
 }
 
@@ -411,6 +414,7 @@ export class DwsWatcher {
         message,
         decision: result.decision,
         actions: result.actions,
+        conversationSummary: result.conversationSummary,
         duplicate: result.duplicate,
         durationMs: Date.now() - started,
       });

@@ -4,7 +4,13 @@ import Database from "better-sqlite3";
 import * as sqliteVec from "sqlite-vec";
 import { chunkText } from "./chunk";
 import type { Embedder } from "./embedder";
-import type { ChatMessageRecord, MemoryHit, MemorySearchOptions, RagStore } from "./types";
+import type {
+  ChatMessageRecord,
+  MemoryHit,
+  MemorySearchOptions,
+  RagStore,
+  RecentMessage,
+} from "./types";
 
 export interface OpenRagStoreOptions {
   dbPath: string;
@@ -154,6 +160,31 @@ export class SqliteRagStore implements RagStore {
       .prepare("SELECT 1 AS found FROM messages WHERE channel = ? AND external_id = ? LIMIT 1")
       .get(channel, externalId) as { found: number } | undefined;
     return Boolean(row);
+  }
+
+  async recentMessages(conversationId: string, limit: number): Promise<RecentMessage[]> {
+    const rows = this.db
+      .prepare(
+        `SELECT id, role, sender, content, created_at
+         FROM messages
+         WHERE conversation_id = ?
+         ORDER BY created_at DESC, rowid DESC
+         LIMIT ?`,
+      )
+      .all(conversationId, Math.max(1, limit)) as Array<{
+      id: string;
+      role: string;
+      sender: string | null;
+      content: string;
+      created_at: number;
+    }>;
+    return rows.reverse().map((row) => ({
+      id: row.id,
+      role: row.role,
+      sender: row.sender ?? undefined,
+      content: row.content,
+      createdAt: row.created_at,
+    }));
   }
 
   async search(query: string, options: MemorySearchOptions = {}): Promise<MemoryHit[]> {

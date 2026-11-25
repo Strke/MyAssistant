@@ -9,6 +9,14 @@ export interface ChatMessageRecord {
   createdAt: number;
 }
 
+export interface RecentMessage {
+  id: string;
+  role: string;
+  sender?: string;
+  content: string;
+  createdAt: number;
+}
+
 export interface MemoryHit {
   chunkId: string;
   messageId: string;
@@ -29,5 +37,7 @@ export interface RagStore {
   search(query: string, options?: MemorySearchOptions): Promise<MemoryHit[]>;
   /** Optional fast duplicate check by channel/external id. */
   hasMessage?(channel: string, externalId: string): boolean;
+  /** Recent messages in one conversation, oldest to newest. */
+  recentMessages?(conversationId: string, limit: number): Promise<RecentMessage[]>;
   close(): Promise<void>;
 }

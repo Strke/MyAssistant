@@ -6,6 +6,7 @@ export type { ConversationRecord, ReplOptions } from "./repl";
 export { runRepl } from "./repl";
 export type {
   ReviewBlackboardItem,
+  ReviewConversationMessage,
   ReviewDecision,
   ReviewEngine,
   ReviewEngineOptions,
