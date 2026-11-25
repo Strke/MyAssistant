@@ -19,6 +19,7 @@ export interface ReviewConversationMessage {
 
 export interface ReviewInput {
   conversationSummary?: string;
+  previousReply?: string;
   message: {
     content: string;
     sender?: string;
@@ -45,6 +46,7 @@ export interface ReviewTaskSuggestion {
 export interface ReviewDecision {
   related: boolean;
   alreadyDone: boolean;
+  coveredByPreviousReply: boolean;
   confidence: number;
   reason: string;
   evidence: string[];
@@ -72,12 +74,15 @@ export interface ReviewEngineOptions {
 
 const SYSTEM_PROMPT = `You are a cautious reviewer for a personal assistant.
 
-The current user is the owner of this DingTalk account. You receive one new DingTalk message and retrieved snippets from the user's memory. Your job is only to classify the message.
+The current user is the owner of this DingTalk account. You receive one new DingTalk message or a block of consecutive messages from the same sender, plus retrieved snippets from the user's memory. Your job is only to classify the message block.
+
+When multiple messages are listed, treat them as one consecutive block from the same sender. Do not assume the first message is the whole thought.
 
 Return one JSON object with exactly these fields:
 {
   "related": boolean,
   "alreadyDone": boolean,
+  "coveredByPreviousReply": boolean,
   "confidence": number between 0 and 1,
   "reason": string,
   "evidence": string[],
@@ -88,6 +93,13 @@ Return one JSON object with exactly these fields:
 }
 
 Rules:
+- If a previous assistant reply is provided, first decide whether it already correctly addresses the new message(s) in the same message block.
+  - Set coveredByPreviousReply=true when the new messages are continuations, acknowledgements, thanks, closing remarks, or extra details that the previous reply already covers.
+  - If the previous reply already acknowledged the matter or promised to handle it, treat additional details, logs, screenshots, or clarifications about that same matter as covered. Do not reply again unless they add a new request, change the scope/deadline, or correct a misunderstanding.
+  - When coveredByPreviousReply=true, set related=false, alreadyDone=false, blackboardAction="none", and omit suggestedReply, blackboardItem and completedTaskId.
+  - If the new messages add a new request, correct the assistant, or need information not in the previous reply, set coveredByPreviousReply=false and judge normally.
+  - When uncertain, set coveredByPreviousReply=false.
+- Pure acknowledgements, thanks, emoji, or closing remarks are related=false.
 - related=true only if the message asks the current user to do something, reports something they own or need to handle, mentions them directly, or clearly expects their reply/action.
 - Generic group chatter, other people's work, announcements unrelated to the user, and bot/automated noise are related=false.
 - alreadyDone=true only when the memory explicitly shows this specific matter was already handled or answered. If uncertain, use false.
@@ -167,7 +179,7 @@ function formatBlackboard(items: ReviewBlackboardItem[] | undefined): string {
   return items.map((item) => `- [${item.status}] ${item.id}: ${item.title}`).join("\n");
 }
 
-function parseDecision(text: string): ReviewDecision {
+export function parseDecision(text: string): ReviewDecision {
   const trimmed = text.trim();
   const start = trimmed.indexOf("{");
   const end = trimmed.lastIndexOf("}");
@@ -185,7 +197,8 @@ function parseDecision(text: string): ReviewDecision {
   if (typeof record.related !== "boolean" || typeof record.alreadyDone !== "boolean") {
     throw new Error("Review model response is missing related/alreadyDone booleans.");
   }
-  const related = record.related;
+  const coveredByPreviousReply = record.coveredByPreviousReply === true;
+  const related = coveredByPreviousReply ? false : record.related;
   const alreadyDone = related ? record.alreadyDone : false;
   const confidence =
     typeof record.confidence === "number" && Number.isFinite(record.confidence)
@@ -226,6 +239,7 @@ function parseDecision(text: string): ReviewDecision {
   return {
     related,
     alreadyDone,
+    coveredByPreviousReply,
     confidence,
     reason: typeof record.reason === "string" ? record.reason.trim() : "",
     evidence,
@@ -300,7 +314,7 @@ export async function createReviewEngine(
         const text = await completeText(
           SYSTEM_PROMPT,
           [
-            `New DingTalk message:`,
+            `New DingTalk message(s):`,
             `chat_type: ${input.message.chatType ?? "unknown"}`,
             `conversation_id: ${input.message.conversationId}`,
             `sender: ${input.message.sender ?? "unknown"}`,
@@ -310,6 +324,9 @@ export async function createReviewEngine(
             "",
             "Conversation summary of recent messages:",
             input.conversationSummary || "(no recent conversation summary)",
+            "",
+            "Previous assistant reply to this same message block:",
+            input.previousReply || "(none)",
             "",
             "Related memory snippets:",
             formatHits(input.hits),

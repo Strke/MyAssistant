@@ -38,6 +38,8 @@ interface ReviewLogEntry {
   actions?: unknown;
   conversationSummary?: string;
   duplicate?: boolean;
+  batched?: boolean;
+  batchSize?: number;
   error?: string;
   durationMs: number;
 }
@@ -204,6 +206,8 @@ async function postReview(
   decision?: unknown;
   actions?: unknown;
   conversationSummary?: string;
+  batched?: boolean;
+  batchSize?: number;
 }> {
   const response = await fetch(`${config.reviewUrl}/v1/dingtalk/review`, {
     method: "POST",
@@ -223,7 +227,7 @@ async function postReview(
       createdAt: message.createdAt,
       senderIsSelf: message.senderIsSelf,
     }),
-    signal: AbortSignal.timeout(180_000),
+    signal: AbortSignal.timeout(240_000),
   });
   const text = await response.text();
   let payload: unknown;
@@ -243,6 +247,11 @@ async function postReview(
     decision: body?.decision,
     actions: body?.actions,
     conversationSummary: stringValue(body?.conversationSummary),
+    batched: body?.batched === true,
+    batchSize:
+      typeof body?.batchSize === "number" && Number.isFinite(body.batchSize)
+        ? body.batchSize
+        : undefined,
   };
 }
 
@@ -416,6 +425,8 @@ export class DwsWatcher {
         actions: result.actions,
         conversationSummary: result.conversationSummary,
         duplicate: result.duplicate,
+        batched: result.batched,
+        batchSize: result.batchSize,
         durationMs: Date.now() - started,
       });
     } catch (error) {

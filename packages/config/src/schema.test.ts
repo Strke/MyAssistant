@@ -83,6 +83,9 @@ describe("loadConfig", () => {
       REVIEW_TOP_K: "3",
       REVIEW_TOKEN: "review-token",
       REVIEW_AUTO_REPLY_DMS: "open-1, cid-2",
+      REVIEW_REPLY_DEBOUNCE_SECONDS: "12",
+      REVIEW_REPLY_DEBOUNCE_MAX_SECONDS: "45",
+      REVIEW_BLOCK_CONTINUATION_SECONDS: "240",
     });
     expect(config.review.enabled).toBe(true);
     expect(config.review.port).toBe(9999);
@@ -90,6 +93,10 @@ describe("loadConfig", () => {
     expect(config.review.recentMessages).toBe(15);
     expect(config.review.summaryPath).toBe("./data/conversation-summaries.json");
     expect(config.review.autoReplyDms).toEqual(["open-1", "cid-2"]);
+    expect(config.review.replyDebounceSeconds).toBe(12);
+    expect(config.review.replyDebounceMaxSeconds).toBe(45);
+    expect(config.review.blockContinuationSeconds).toBe(240);
+    expect(config.review.blockPath).toBe("./data/reply-blocks.json");
     expect(config.review.token).toBe("review-token");
   });
 });

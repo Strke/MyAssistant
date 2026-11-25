@@ -165,7 +165,7 @@ npm run dws-watch          # 前台调试
 npm run dws-watch:start    # 运行构建产物
 ```
 
-每条单聊消息会先写入 RAG，读取该会话持久化的滚动摘要（首次用最近 15 条生成），再结合长期 RAG 检索和黑板做判断；审阅后更新本地黑板并把本轮消息和实际回复（如有）合并回滚动摘要，写入 B 的审阅日志。当前仅对白名单单聊自动回复（目前为林雨涛），其他单聊和群不回复，黑板也不推送。你自己发出的消息仍会写入 RAG，但不会触发回复、黑板动作或摘要更新，避免自我循环。当前只监听单聊（`DWS_WATCH_GROUPS` 留空，`DWS_WATCH_DMS=all`），A 端用 `REVIEW_AUTO_REPLY_DMS`、B 端用 `DWS_REPLY_DM_OPEN_DINGTALK_IDS` 双重限制回复对象。部署、黑板和日志格式见 [`docs/DWS_REVIEW.md`](docs/DWS_REVIEW.md)。
+每条单聊消息会先写入 RAG，读取该会话持久化的滚动摘要（首次用最近 15 条生成），再结合长期 RAG 检索和黑板做判断；审阅后更新本地黑板并把本轮消息和实际回复（如有）合并回滚动摘要，写入 B 的审阅日志。白名单单聊会把对方连续消息合并成消息块，静默 8 秒或最长 30 秒后处理，一块只回复一次；回复后 180 秒内的续聊会先判断是否已被上一条回复覆盖，覆盖则不重复回复。当前仅对白名单单聊自动回复（目前为林雨涛），其他单聊和群不回复，黑板也不推送。你自己发出的消息仍会写入 RAG，但不会触发回复、黑板动作或摘要更新，避免自我循环。当前只监听单聊（`DWS_WATCH_GROUPS` 留空，`DWS_WATCH_DMS=all`），A 端用 `REVIEW_AUTO_REPLY_DMS`、B 端用 `DWS_REPLY_DM_OPEN_DINGTALK_IDS` 双重限制回复对象。部署、黑板和日志格式见 [`docs/DWS_REVIEW.md`](docs/DWS_REVIEW.md)。
 
 RAG 会记录每轮对话并提供 `memory_search` 工具。默认使用 OpenAI 兼容的 embedding 接口，需配置 `RAG_EMBEDDING_API_KEY`（可选 `RAG_EMBEDDING_BASE_URL`）；本地调试可设 `RAG_EMBEDDING_PROVIDER=hash`。未配置凭证时 RAG 会自动跳过。
 

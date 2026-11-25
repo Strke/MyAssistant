@@ -29,12 +29,14 @@ B 机
 A 机
   assistant review server
     1. 消息写入 RAG
-    2. 读取该会话持久化的滚动摘要；首次没有摘要时，用最近 15 条消息生成初始摘要
-    3. bge-m3 检索长期历史（topK 8）
-    4. deepseek-v4.1-flash 结合“滚动摘要 + 长期检索 + 黑板”判断
-    5. 更新本地黑板；仅对白名单单聊自动回复，不推送黑板
-    6. 把当前消息和实际回复（如有）合并进滚动摘要并持久化
-    7. 返回 decision + actions + 更新后的 conversationSummary
+    2. 白名单单聊按会话聚合成消息块：静默 8 秒或最长 30 秒后处理
+    3. 读取该会话持久化的滚动摘要；首次没有摘要时，用最近 15 条消息生成初始摘要
+    4. bge-m3 检索长期历史（topK 8）
+    5. deepseek-v4.1-flash 结合“滚动摘要 + 长期检索 + 黑板 + 上一条回复”判断
+    6. 如果本块已被上一条回复覆盖，只更新摘要，不再回复
+    7. 更新本地黑板；仅对白名单单聊自动回复，不推送黑板
+    8. 把本块消息和实际回复（如有）合并进滚动摘要并持久化
+    9. 返回 decision + actions + 更新后的 conversationSummary
         │
         ▼
 B 机
@@ -103,6 +105,10 @@ REVIEW_MAX_CONTENT_CHARS=8000
 REVIEW_TIMEOUT_SECONDS=90
 REVIEW_AUTO_REPLY=true
 REVIEW_AUTO_REPLY_DMS=白名单openDingTalkId或conversationId
+REVIEW_REPLY_DEBOUNCE_SECONDS=8
+REVIEW_REPLY_DEBOUNCE_MAX_SECONDS=30
+REVIEW_BLOCK_CONTINUATION_SECONDS=180
+REVIEW_BLOCK_PATH=./data/reply-blocks.json
 BLACKBOARD_ENABLED=true
 BLACKBOARD_PATH=./data/blackboard.json
 BLACKBOARD_GROUP_ID=
@@ -167,6 +173,26 @@ DWS_SEND_GROUPS=cidx7ygN7Xd06+ARqXKam58gA==
 dws chat data-auth cross-org --all --grant-type timed --ttl 24h --format json
 ```
 
+## 消息块与等待
+
+白名单单聊不会收到一条就立刻回复，而是按“消息块”处理：
+
+- 同一个会话里，对方连续发来的消息会合并成一个块。
+- 每条新消息都会重置静默计时；静默 `REVIEW_REPLY_DEBOUNCE_SECONDS`（默认 8 秒）后开始处理。
+- 从第一条消息算起最多等待 `REVIEW_REPLY_DEBOUNCE_MAX_SECONDS`（默认 30 秒），避免一直等。
+- 处理时把整块消息一起判断和回复，只回复一次。
+- 回复后 `REVIEW_BLOCK_CONTINUATION_SECONDS`（默认 180 秒）内，如果对方继续发消息，会把上一条回复和新消息一起交给模型判断：
+  - 如果上一条回复已经覆盖这些消息，标记 `actions.skipped="covered"`，不再回复。
+  - 如果对方补充了新请求、纠正了理解，或需要新信息，则作为新块继续回复。
+- 上一条回复保存在 `REVIEW_BLOCK_PATH`（默认 `data/reply-blocks.json`），重启后仍能判断续聊。
+
+日志里会出现：
+
+- `batchSize`：这一块包含几条消息
+- `previousReplyUsed`：是否带上了上一条回复
+- `coveredByPreviousReply`：是否被上一条回复覆盖
+- `batched: true`：该条消息属于同一块的非最后一条，B 不重复记录判断结果
+
 ## 黑板
 
 - 未完成事项全部保留
@@ -187,11 +213,12 @@ data/conversation-summaries.json
 处理顺序：
 
 1. 新消息写入 RAG。
-2. 读取该会话已有摘要。首次没有摘要时，取同一会话最近 15 条消息（不含当前消息）生成初始摘要。
-3. 用当前消息做长期 RAG 检索，结合滚动摘要和黑板进行判断。
-4. 更新本地黑板；仅对白名单单聊回复，不推送黑板。
-5. 把当前消息（以及实际发出的回复，如果有）交给模型，合并进旧摘要，覆盖保存。
-6. 自己发送的消息仍写入 RAG，但不会触发判断、回复、黑板动作或摘要更新；非白名单会话没有自动回复，因此只合并对方消息。
+2. 读取该会话已有摘要。首次没有摘要时，取同一会话最近 15 条消息（不含当前消息块）生成初始摘要。
+3. 用整块消息做长期 RAG 检索，结合滚动摘要、黑板和上一条回复进行判断。
+4. 如果本块已被上一条回复覆盖，只更新摘要，不再回复或改黑板。
+5. 否则更新本地黑板；仅对白名单单聊回复，不推送黑板。
+6. 把整块消息（以及实际发出的回复，如果有）交给模型，合并进旧摘要，覆盖保存。
+7. 自己发送的消息仍写入 RAG，但不会触发判断、回复、黑板动作或摘要更新；非白名单会话没有自动回复，因此只合并对方消息。
 
 这样摘要会随对话持续滚动，不需要每次把最近 15 条重新压缩；`REVIEW_RECENT_MESSAGES` 只用于首次初始化摘要。
 
@@ -204,11 +231,11 @@ data/conversation-summaries.json
 ```json
 {
   "receivedAt": "2026-11-25T02:30:00.000Z",
-  "source": "group:cid...",
+  "source": "direct:all",
   "message": {
     "messageId": "...",
     "conversationId": "...",
-    "chatType": "group",
+    "chatType": "direct",
     "sender": "张三",
     "content": "请确认漏洞修复是否完成",
     "createdAt": 179...
@@ -216,6 +243,7 @@ data/conversation-summaries.json
   "decision": {
     "related": true,
     "alreadyDone": false,
+    "coveredByPreviousReply": false,
     "confidence": 0.88,
     "reason": "...",
     "evidence": ["..."],
@@ -227,14 +255,16 @@ data/conversation-summaries.json
   },
   "actions": {
     "blackboard": { "action": "add", "changed": true, "taskId": "bb_..." },
-    "pushed": true,
     "reply": { "sent": true, "text": "收到，我先记到黑板上了。" }
   },
   "conversationSummary": "本轮更新后的滚动摘要...",
+  "batchSize": 2,
   "duplicate": false,
   "durationMs": 6400
 }
 ```
+
+同一块的非最后一条会记录 `"batched": true`；如果被上一条回复覆盖，会记录 `"actions": {"skipped": "covered"}`，不会发送新回复。
 
 查看最新记录：
 
@@ -253,6 +283,9 @@ A 处理失败时也会写一条记录，带 `error` 字段，方便排查。
 ## 当前边界
 
 - 当前仅对白名单单聊自动回复；其他单聊和所有群不回复；黑板只本地更新、不推送；消息仍进入 RAG、更新滚动摘要并写审阅日志
+- 白名单单聊会等待消息块：静默 8 秒或最长 30 秒后处理，一块只回复一次
+- 回复后 180 秒内的续聊会先判断是否已被上一条回复覆盖；覆盖则不再回复
+- 上一条回复持久化在 `data/reply-blocks.json`
 - 当前只监听单聊；群聊默认关闭，需要在 `DWS_WATCH_GROUPS` 显式加回并重启 watcher
 - 单聊由 `DWS_WATCH_DMS=all` 开启
 - 消息会进入 A 的 RAG，模型判断基于检索到的历史

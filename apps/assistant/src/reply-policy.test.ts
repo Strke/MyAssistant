@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shouldAutoReply } from "./reply-policy";
+import { isAcknowledgement, shouldAutoReply } from "./reply-policy";
 
 const target = {
   chatType: "direct",
@@ -33,5 +33,24 @@ describe("shouldAutoReply", () => {
 
   it("supports an explicit all allowlist", () => {
     expect(shouldAutoReply(target, { enabled: true, allowlist: ["all"] })).toBe(true);
+  });
+});
+
+describe("isAcknowledgement", () => {
+  it("recognizes common acknowledgements and thanks", () => {
+    for (const text of ["好的", "收到", "嗯嗯", "谢谢老板", "辛苦了", "OK", "好的，辛苦了"]) {
+      expect(isAcknowledgement(text)).toBe(true);
+    }
+  });
+
+  it("does not swallow new requests or corrections", () => {
+    for (const text of [
+      "好的，但是还有个问题",
+      "谢谢，帮我再看下日志",
+      "收到，明天处理",
+      "嗯，那就这样",
+    ]) {
+      expect(isAcknowledgement(text)).toBe(false);
+    }
   });
 });
