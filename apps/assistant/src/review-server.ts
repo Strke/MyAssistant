@@ -3,12 +3,14 @@ import type { AppConfig } from "@myassistant/config";
 import {
   createReviewEngine,
   type Logger,
+  type ReviewConversationMessage,
   type ReviewDecision,
   type ReviewEngine,
 } from "@myassistant/core";
 import { createDwsGatewayClient } from "@myassistant/dingtalk-dws";
 import type { ChatMessageRecord, MemoryHit, RagStore } from "@myassistant/rag";
 import { BlackboardStore } from "./blackboard";
+import { ConversationSummaryStore } from "./conversation-summary";
 
 const MAX_BODY_BYTES = 128 * 1024;
 
@@ -148,6 +150,8 @@ export async function createReviewServer(options: ReviewServerOptions): Promise<
     ? new BlackboardStore(config.review.blackboardPath, config.review.maxCompleted)
     : undefined;
   await blackboard?.init();
+  const summaries = new ConversationSummaryStore(config.review.summaryPath);
+  await summaries.init();
   const gateway =
     config.review.autoReply || config.review.blackboardEnabled
       ? createDwsGatewayClient({
@@ -156,6 +160,64 @@ export async function createReviewServer(options: ReviewServerOptions): Promise<
           timeoutMs: config.dws.requestTimeoutSeconds * 1_000,
         })
       : undefined;
+
+  const toReviewMessage = (message: {
+    role: string;
+    sender?: string;
+    content: string;
+    createdAt: number;
+  }): ReviewConversationMessage => ({
+    role: message.role,
+    sender: message.sender,
+    content: message.content,
+    createdAt: message.createdAt,
+  });
+
+  const loadConversationSummary = async (
+    conversationId: string,
+    currentMessageId: string,
+  ): Promise<string> => {
+    try {
+      const existing = await summaries.get(conversationId);
+      if (existing) {
+        return existing;
+      }
+      const recent =
+        (await store.recentMessages?.(conversationId, config.review.recentMessages + 1)) ?? [];
+      const prior = recent
+        .filter((message) => message.id !== currentMessageId)
+        .slice(-config.review.recentMessages);
+      if (prior.length === 0) {
+        return "";
+      }
+      const generated = (await engine.summarizeConversation(prior.map(toReviewMessage))).trim();
+      if (generated) {
+        await summaries.set(conversationId, generated);
+      }
+      return generated;
+    } catch (error) {
+      logger?.warn(
+        { err: error },
+        "conversation summary bootstrap failed; continuing without summary",
+      );
+      return "";
+    }
+  };
+
+  const mergeConversationSummary = async (
+    conversationId: string,
+    messages: ReviewConversationMessage[],
+  ): Promise<string> => {
+    try {
+      const updated = await summaries.update(conversationId, async (current) =>
+        engine.updateConversationSummary({ previousSummary: current, messages }),
+      );
+      return updated ?? "";
+    } catch (error) {
+      logger?.warn({ err: error }, "conversation summary update failed; keeping previous summary");
+      return (await summaries.get(conversationId).catch(() => undefined)) ?? "";
+    }
+  };
 
   const handleEvent = async (event: ReviewEvent): Promise<ReviewResponse> => {
     if (store.hasMessage?.("dingtalk", event.messageId)) {
@@ -178,32 +240,12 @@ export async function createReviewServer(options: ReviewServerOptions): Promise<
     if (event.senderIsSelf) {
       logger?.info(
         { messageId: event.messageId },
-        "self message stored in RAG; skipped review actions",
+        "self message stored in RAG; skipped review actions and summary update",
       );
       return { duplicate: false, actions: { skipped: "self" } };
     }
 
-    let recentSummary = "";
-    try {
-      const recent =
-        (await store.recentMessages?.(record.conversationId, config.review.recentMessages + 1)) ??
-        [];
-      const prior = recent
-        .filter((message) => message.id !== record.id)
-        .slice(-config.review.recentMessages);
-      if (prior.length > 0) {
-        recentSummary = await engine.summarizeConversation(
-          prior.map((message) => ({
-            role: message.role,
-            sender: message.sender,
-            content: message.content,
-            createdAt: message.createdAt,
-          })),
-        );
-      }
-    } catch (error) {
-      logger?.warn({ err: error }, "conversation summarize failed; continuing without summary");
-    }
+    const summaryUsed = await loadConversationSummary(record.conversationId, record.id);
 
     let hits: MemoryHit[] = [];
     try {
@@ -221,7 +263,7 @@ export async function createReviewServer(options: ReviewServerOptions): Promise<
       : undefined;
 
     const decision = await engine.judge({
-      conversationSummary: recentSummary,
+      conversationSummary: summaryUsed,
       message: {
         content: event.content,
         sender: event.sender,
@@ -296,6 +338,27 @@ export async function createReviewServer(options: ReviewServerOptions): Promise<
       }
     }
 
+    const summaryMessages: ReviewConversationMessage[] = [
+      {
+        role: "user",
+        sender: event.sender ?? event.senderOpenDingTalkId,
+        content: event.content,
+        createdAt,
+      },
+    ];
+    if (actions.reply?.sent && actions.reply.text) {
+      summaryMessages.push({
+        role: "assistant",
+        sender: "我",
+        content: actions.reply.text,
+        createdAt: Date.now(),
+      });
+    }
+    const conversationSummary = await mergeConversationSummary(
+      record.conversationId,
+      summaryMessages,
+    );
+
     logger?.info(
       {
         eventId: event.eventId,
@@ -307,11 +370,12 @@ export async function createReviewServer(options: ReviewServerOptions): Promise<
         blackboardAction: decision.blackboardAction,
         blackboardPushed: actions.pushed,
         replied: actions.reply?.sent,
-        summaryLength: recentSummary.length,
+        summaryUsedLength: summaryUsed.length,
+        summaryLength: conversationSummary.length,
       },
       "review decision",
     );
-    return { duplicate: false, decision, actions, conversationSummary: recentSummary };
+    return { duplicate: false, decision, actions, conversationSummary };
   };
 
   let server: Server | undefined;

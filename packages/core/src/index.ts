@@ -12,6 +12,7 @@ export type {
   ReviewEngineOptions,
   ReviewInput,
   ReviewMemoryHit,
+  ReviewSummaryInput,
 } from "./review";
 export { createReviewEngine } from "./review";
 export type { AssistantRuntime, RuntimeSummary } from "./runtime";

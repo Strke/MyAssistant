@@ -87,6 +87,7 @@ describe("loadConfig", () => {
     expect(config.review.port).toBe(9999);
     expect(config.review.topK).toBe(3);
     expect(config.review.recentMessages).toBe(15);
+    expect(config.review.summaryPath).toBe("./data/conversation-summaries.json");
     expect(config.review.token).toBe("review-token");
   });
 });
