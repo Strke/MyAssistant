@@ -1,12 +1,12 @@
 # DWS 实时审阅（只读）
 
-这条链路监听 B 机当前钉钉账号可见的群/单聊消息，把消息送到 A 机做 RAG 检索和模型判断，并把原始消息 + 判断结果写到 B 机的 JSONL 文件。
+这条链路监听 B 机当前钉钉账号可见的单聊消息，把消息送到 A 机做 RAG 检索和模型判断，并把原始消息 + 判断结果写到 B 机的 JSONL 文件。
 
 在判断为相关时，会：
 
 - 更新 A 机的黑板
 - 将整块黑板推送到 B 的「黑板推送」群
-- 在 MonkeyScan Review引擎 群和单聊中自动回复原消息
+- 在单聊中自动回复原消息
 
 黑板只保留未完成事项；已完成事项只保留最新 5 项。
 
@@ -55,8 +55,8 @@ B 机
 
 ```bash
 DWS_BIN=/Users/lin/.nvm/versions/node/v24.17.0/bin/dws
-DWS_WATCH_GROUPS=cid6WlrFjAj3jSSMMczR+XEXQ==
-DWS_WATCH_DMS=
+DWS_WATCH_GROUPS=
+DWS_WATCH_DMS=all
 A_REVIEW_URL=https://renzelinmac-mini.taild927d7.ts.net
 A_REVIEW_TOKEN=与 A 的 REVIEW_TOKEN 一致
 DWS_WATCH_LOG=/Users/lin/dws-watch/reviews.jsonl
@@ -66,7 +66,7 @@ DWS_WATCH_IGNORE_SENDERS=邮箱助手,钉钉助手,钉钉小秘书
 DWS_WATCH_IGNORE_OPEN_IDS=
 ```
 
-`DWS_WATCH_GROUPS` 是群 `openConversationId`，多个用逗号分隔。`DWS_WATCH_DMS=all` 会监听全部单聊；默认留空，避免把所有私聊写入审阅库。
+`DWS_WATCH_GROUPS` 是群 `openConversationId`，多个用逗号分隔。当前只监听单聊：`DWS_WATCH_GROUPS` 留空，`DWS_WATCH_DMS=all`。如需恢复某个群，把群 id 填回并重启 watcher。
 
 launchd：
 
@@ -122,11 +122,11 @@ curl http://127.0.0.1:8788/health
 B 的 gateway 只允许：
 
 ```bash
-DWS_REPLY_GROUPS=cid6WlrFjAj3jSSMMczR+XEXQ==
+DWS_REPLY_GROUPS=
 DWS_REPLY_DMS=all
 ```
 
-因此自动回复只会在 MonkeyScan Review引擎 群和单聊中发生。回复使用 DWS 当前登录用户身份，默认带 AI 角标。
+因此当前自动回复只发生在单聊；群回复已关闭。回复使用 DWS 当前登录用户身份，默认带 AI 角标。
 
 跨组织单聊在 DWS 中可能缺少跨组织数据授权，回复会失败并记录在 `actions.reply.error`。如确需回复跨组织会话，需要在 B 上按提示执行：
 
@@ -218,7 +218,7 @@ A 处理失败时也会写一条记录，带 `error` 字段，方便排查。
 
 ## 当前边界
 
-- 群聊只监听显式配置的 `DWS_WATCH_GROUPS`
+- 当前只监听单聊；群聊默认关闭，需要在 `DWS_WATCH_GROUPS` 显式加回并重启 watcher
 - 单聊由 `DWS_WATCH_DMS=all` 开启
 - 消息会进入 A 的 RAG，模型判断基于检索到的历史
 - `related`/`alreadyDone` 是模型判断，不是绝对事实；不确定时应以 `alreadyDone=false` 处理
