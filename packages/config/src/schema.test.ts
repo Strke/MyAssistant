@@ -10,6 +10,8 @@ describe("loadConfig", () => {
     expect(config.rag.topK).toBe(8);
     expect(config.dingtalk.enabled).toBe(false);
     expect(config.tasks.backend).toBe("local");
+    expect(config.assets.enabled).toBe(true);
+    expect(config.assets.path).toBe("./data/assets.json");
   });
 
   it("parses booleans and numbers from env strings", () => {

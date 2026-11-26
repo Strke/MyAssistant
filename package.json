@@ -29,6 +29,7 @@
     "login": "pi",
     "assistant": "tsx apps/assistant/src/client.ts",
     "vault": "tsx apps/assistant/src/cli.ts",
+    "assets": "tsx apps/assistant/src/asset-cli.ts",
     "build": "tsup",
     "start": "node dist/assistant.js",
     "start:daemon": "node dist/assistant.js --daemon",

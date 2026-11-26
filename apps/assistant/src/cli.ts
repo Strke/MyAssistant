@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { stderr, stdin, stdout } from "node:process";
 import { loadConfigFromEnvFile } from "@myassistant/config";
 import { openVault } from "./vault-runtime";
@@ -8,9 +9,24 @@ function usage(): void {
 Commands:
   list                               List secret names
   get <name>                         Print a secret value
-  set <name> [--description <text>]  Store or update a secret (value is prompted)
+  set <name> [--description <text>] [--file <path>]
+                                     Store or update a secret (value is prompted,
+                                     or read from --file for multi-line keys)
   rm <name>                          Delete a secret
 `);
+}
+
+function takeOption(args: string[], name: string): string | undefined {
+  const index = args.indexOf(name);
+  if (index < 0) {
+    return undefined;
+  }
+  const value = args[index + 1];
+  if (!value || value.startsWith("--")) {
+    throw new Error(`${name} requires a value.`);
+  }
+  args.splice(index, 2);
+  return value;
 }
 
 function readSecret(prompt: string): Promise<string> {
@@ -70,13 +86,9 @@ async function main(): Promise<void> {
     return;
   }
 
-  const descriptionIndex = rest.indexOf("--description");
-  const description = descriptionIndex >= 0 ? rest[descriptionIndex + 1] : undefined;
-  const positional =
-    descriptionIndex >= 0
-      ? rest.filter((_, index) => index !== descriptionIndex && index !== descriptionIndex + 1)
-      : rest;
-  const name = positional[0];
+  const description = takeOption(rest, "--description");
+  const filePath = takeOption(rest, "--file");
+  const name = rest[0];
 
   const config = loadConfigFromEnvFile();
   const vault = openVault(config);
@@ -117,7 +129,12 @@ async function main(): Promise<void> {
           process.exitCode = 1;
           break;
         }
-        const value = await readSecret(`Value for ${name}: `);
+        let value: string;
+        if (filePath) {
+          value = (await readFile(filePath, "utf8")).trim();
+        } else {
+          value = await readSecret(`Value for ${name}: `);
+        }
         if (!value) {
           stderr.write("Empty value, nothing stored.\n");
           process.exitCode = 1;

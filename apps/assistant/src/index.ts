@@ -1,3 +1,4 @@
+import { createAssetTools } from "@myassistant/assets";
 import { loadConfigFromEnvFile } from "@myassistant/config";
 import { createLogger, describeRuntime, runRepl, type ToolDefinition } from "@myassistant/core";
 import {
@@ -8,6 +9,7 @@ import {
 } from "@myassistant/rag";
 import { createTaskTools, type TaskManager } from "@myassistant/tasks";
 import { createVaultTools, type Vault } from "@myassistant/vault";
+import { openAssetStore } from "./asset-runtime";
 import { runDaemon } from "./daemon";
 import { runDingTalkMode } from "./dingtalk-mode";
 import { openTaskManager } from "./task-runtime";
@@ -51,6 +53,16 @@ try {
 }
 
 const activeVault = vault;
+
+if (config.assets.enabled) {
+  try {
+    const inventory = await openAssetStore(config);
+    customTools.push(...createAssetTools(inventory));
+    logger.info({ path: config.assets.path }, "asset inventory enabled");
+  } catch (error) {
+    logger.warn({ err: error }, "asset inventory disabled");
+  }
+}
 
 let taskManager: TaskManager | undefined;
 try {

@@ -3,6 +3,7 @@ import { defineConfig } from "tsup";
 export default defineConfig({
   entry: {
     assistant: "apps/assistant/src/index.ts",
+    assets: "apps/assistant/src/asset-cli.ts",
     vault: "apps/assistant/src/cli.ts",
     client: "apps/assistant/src/client.ts",
     launchd: "apps/assistant/src/launchd.ts",

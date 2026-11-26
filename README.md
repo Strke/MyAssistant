@@ -191,12 +191,27 @@ RAG_EMBEDDING_API_KEY=ollama
 
 ```bash
 npm run vault -- set github_token --description "GitHub token"
+npm run vault -- set macmini_ssh --description "Mac mini SSH key" --file ~/.ssh/id_ed25519
 npm run vault -- list
 npm run vault -- get github_token
 npm run vault -- rm github_token
 ```
 
 Agent 可通过 `vault_get` / `vault_list` 工具访问密钥。CI 或非 macOS 环境可设置 `VAULT_MASTER_KEY`（base64 的 32 字节）或 `VAULT_PASSPHRASE`。
+
+资产库记录机器/设备的连接信息，密钥值仍然放在 vault。资产里只保存 `secretName` 引用：
+
+```bash
+npm run assets -- add mac-mini --name "Mac mini" --kind server \
+  --address 100.88.41.16 --tag mac --tag tailscale \
+  --access 'ssh:label=tailscale-ssh,port=22,user=renzelin,secret=macmini_ssh,secretKind=ssh_key'
+
+npm run assets -- list
+npm run assets -- show mac-mini
+npm run assets -- doctor
+```
+
+Agent 可通过 `asset_list` / `asset_get` / `asset_connection` 查看有什么机器、怎么连、引用哪个密钥；这些工具不会返回密钥值。详细格式见 [`docs/ASSETS.md`](docs/ASSETS.md)。当前只提供连接信息，不会自动执行远程 SSH/RDP 命令。
 
 ### 任务外派
 
@@ -267,6 +282,7 @@ launchd 会在崩溃后自动重启，日志写入 `data/logs/`。运行 `daemon
 | `npm run daemon:status`      | 查看 launchd 状态           |
 | `npm run build`              | 构建生产产物到 `dist/`      |
 | `npm run vault`              | 管理本地密钥库              |
+| `npm run assets`             | 管理机器/设备资产库         |
 | `npm run typecheck`          | TypeScript 类型检查         |
 | `npm run lint`               | Biome 检查                  |
 | `npm run lint:fix`           | Biome 自动修复              |
@@ -283,6 +299,7 @@ packages/
   core/                  # pi 会话装配、事件流、模型 provider
   rag/                   # 历史聊天知识库
   vault/                 # 加密密钥库
+  assets/                # 机器/设备资产库与 agent 工具
   channel-dingtalk/      # 钉钉 Stream 通道
   dingtalk-dws/          # DWS 网关客户端与历史消息导入
   tasks/                 # 任务外派（AgentDispatcher）

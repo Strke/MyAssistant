@@ -85,6 +85,10 @@ export const appConfigSchema = z.object({
     keychainAccount: z.string().min(1).default("default"),
     autoLockMinutes: z.coerce.number().int().positive().default(15),
   }),
+  assets: z.object({
+    enabled: envBoolean.default(true),
+    path: z.string().min(1).default("./data/assets.json"),
+  }),
   daemon: z.object({
     enabled: envBoolean.default(false),
     socketPath: z.string().min(1).default("./data/assistant.sock"),
@@ -197,6 +201,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       keychainService: clean(env.VAULT_KEYCHAIN_SERVICE),
       keychainAccount: clean(env.VAULT_KEYCHAIN_ACCOUNT),
       autoLockMinutes: clean(env.VAULT_AUTO_LOCK_MINUTES),
+    },
+    assets: {
+      enabled: clean(env.ASSETS_ENABLED),
+      path: clean(env.ASSETS_PATH),
     },
     daemon: {
       enabled: clean(env.DAEMON_ENABLED),
