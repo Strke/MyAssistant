@@ -10,6 +10,7 @@ import { createReviewServer, type ReviewServer } from "./review-server";
 export interface DaemonOptions {
   config: AppConfig;
   customTools: ToolDefinition[];
+  dingtalkCustomTools?: ToolDefinition[];
   taskManager?: TaskManager;
   ragStore?: RagStore;
   onMessage?: (record: ChatMessageRecord) => Promise<void>;
@@ -46,7 +47,7 @@ export async function runDaemon(options: DaemonOptions): Promise<void> {
   if (config.dingtalk.enabled) {
     dingtalk = createDingTalkService({
       config,
-      customTools: options.customTools,
+      customTools: options.dingtalkCustomTools ?? options.customTools,
       taskManager,
       onMessage: options.onMessage,
       logger,

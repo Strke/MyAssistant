@@ -1,3 +1,5 @@
+export type { AssetExecOptions, SecretReader } from "./exec";
+export { createAssetExecTool } from "./exec";
 export { JsonAssetStore } from "./store";
 export { createAssetTools } from "./tool";
 export type {

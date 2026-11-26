@@ -1,4 +1,4 @@
-import { createAssetTools } from "@myassistant/assets";
+import { type AssetStore, createAssetExecTool, createAssetTools } from "@myassistant/assets";
 import { loadConfigFromEnvFile } from "@myassistant/config";
 import { createLogger, describeRuntime, runRepl, type ToolDefinition } from "@myassistant/core";
 import {
@@ -46,22 +46,77 @@ const ragStore = store;
 let vault: Vault | undefined;
 try {
   vault = openVault(config);
-  customTools.push(...createVaultTools(vault));
   logger.info({ path: config.vault.path }, "vault enabled");
 } catch (error) {
   logger.warn({ err: error }, "vault disabled");
 }
 
 const activeVault = vault;
+const protectedSecrets = new Set<string>();
+let inventory: AssetStore | undefined;
 
 if (config.assets.enabled) {
   try {
-    const inventory = await openAssetStore(config);
+    inventory = await openAssetStore(config);
     customTools.push(...createAssetTools(inventory));
-    logger.info({ path: config.assets.path }, "asset inventory enabled");
+    for (const asset of await inventory.list()) {
+      for (const access of asset.access) {
+        if (access.secretName && access.secretKind === "ssh_key") {
+          protectedSecrets.add(access.secretName);
+        }
+      }
+    }
+    logger.info(
+      { path: config.assets.path, protectedKeyCount: protectedSecrets.size },
+      "asset inventory enabled",
+    );
+    if (config.assetExec.enabled) {
+      if (activeVault) {
+        customTools.push(
+          createAssetExecTool(inventory, activeVault, {
+            enabled: true,
+            timeoutMs: config.assetExec.timeoutSeconds * 1_000,
+            maxOutputChars: config.assetExec.maxOutputChars,
+            auditPath: config.assetExec.auditPath,
+          }),
+        );
+        logger.info(
+          {
+            timeoutSeconds: config.assetExec.timeoutSeconds,
+            auditPath: config.assetExec.auditPath,
+          },
+          "asset execution enabled",
+        );
+      } else {
+        logger.warn("asset execution disabled because vault is unavailable");
+      }
+    }
   } catch (error) {
     logger.warn({ err: error }, "asset inventory disabled");
   }
+}
+
+if (activeVault) {
+  const protectedInventory = inventory;
+  customTools.push(
+    ...createVaultTools(activeVault, {
+      protectedSecrets,
+      isProtected: protectedInventory
+        ? async (name) => {
+            for (const asset of await protectedInventory.list()) {
+              if (
+                asset.access.some(
+                  (access) => access.secretName === name && access.secretKind === "ssh_key",
+                )
+              ) {
+                return true;
+              }
+            }
+            return false;
+          }
+        : undefined,
+    }),
+  );
 }
 
 let taskManager: TaskManager | undefined;
@@ -89,12 +144,16 @@ try {
 const activeTaskManager = taskManager;
 
 const onMessage = ragStore ? (record: ChatMessageRecord) => ragStore.addMessage(record) : undefined;
+const dingtalkTools = customTools.filter(
+  (tool) => (tool as { name?: string }).name !== "asset_exec",
+);
 
 try {
   if (daemonMode) {
     await runDaemon({
       config,
       customTools,
+      dingtalkCustomTools: dingtalkTools,
       taskManager: activeTaskManager,
       ragStore,
       onMessage,
@@ -103,7 +162,7 @@ try {
   } else if (config.dingtalk.enabled) {
     await runDingTalkMode({
       config,
-      customTools,
+      customTools: dingtalkTools,
       taskManager: activeTaskManager,
       onMessage,
       logger,

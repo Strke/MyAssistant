@@ -30,7 +30,8 @@ data/vault.enc     密钥值，AES-256-GCM 加密，主密钥在 macOS Keychain
       "port": 22,
       "username": "renzelin",
       "secretName": "macmini_ssh",
-      "secretKind": "ssh_key"
+      "secretKind": "ssh_key",
+      "execEnabled": true
     }
   ]
 }
@@ -39,6 +40,8 @@ data/vault.enc     密钥值，AES-256-GCM 加密，主密钥在 macOS Keychain
 `kind`：`server`、`vm`、`nas`、`router`、`switch`、`laptop`、`desktop`、`phone`、`tablet`、`container`、`cloud`、`other`。
 
 `method`：`ssh`、`rdp`、`vnc`、`http`、`https`、`smb`、`serial`、`other`。
+
+`execEnabled`：只有显式设为 `true` 的 SSH access 才允许 `asset_exec` 执行远程命令，默认 `false`。
 
 `secretKind`：`ssh_key`、`password`、`token`、`certificate`、`other`。
 
@@ -112,9 +115,7 @@ npm run assets -- doctor
 - `asset_get(id)`：查看一个资产的完整信息，包括连接方式和 vault 密钥名
 - `asset_connection(id, accessId?)`：返回 host、port、username、默认命令模板和密钥名
 
-这些工具**不会返回密钥值**。需要读取密钥时仍然由 agent 显式调用 `vault_get`，并会写审计日志。
-
-当前版本只提供资产与连接信息，不会自动执行 SSH/RDP 等远程命令。后续如果要让 agent 直接连接，建议单独增加受控的 `asset_exec` 工具，在工具内部解析 vault 密钥并执行命令，避免把私钥明文放进模型上下文。
+这些资产工具**不会返回密钥值**。需要读取密钥时仍然由 agent 显式调用 `vault_get`，并会写审计日志。远程执行使用单独的 `asset_exec`，见下一节。
 
 ## Agent 如何使用
 
@@ -129,8 +130,57 @@ Agent → asset_connection("mac-mini")
        → 返回 ssh renzelin@100.88.41.16:22，密钥名 macmini_ssh
 
 用户：帮我看下 Mac mini 的磁盘
-Agent → 需要执行远程命令；当前版本会提示需要后续的受控执行工具
+Agent → asset_exec("mac-mini", "df -h")
+       → 返回磁盘信息；私钥不进入模型上下文
 ```
+
+## 执行远程命令
+
+资产条目需要显式打开执行权限：
+
+```bash
+--access 'ssh:label=tailscale-ssh,host=10.0.0.2,port=22,user=renze.lin,secret=macmini_ssh,secretKind=ssh_key,exec=true'
+```
+
+`exec=true` 只对 `ssh` 且 `secretKind=ssh_key` 的 access 生效。Agent 工具：
+
+```text
+asset_exec(id, command, accessId?)
+```
+
+执行流程：
+
+1. 从资产库读取 host、port、username 和 vault 密钥名
+2. 在工具内部调用 vault 读取私钥
+3. 把私钥写入权限 `0600` 的临时文件
+4. 用 `ssh -i <临时文件>` 执行远程命令
+5. 删除临时文件
+6. 返回 stdout、stderr、exitCode；私钥不会进入模型上下文
+
+安全限制：
+
+- 默认 `ASSET_EXEC_ENABLED=false`，需要显式打开
+- 只支持 SSH，不支持密码/RDP/VNC
+- 只允许 `execEnabled=true` 的 access
+- 只允许 `secretKind=ssh_key`
+- 私钥必须是未加密的 OpenSSH/PEM 私钥；带 passphrase 的 key 需要先交给 ssh-agent，当前工具不会交互输入 passphrase
+- `asset_exec` 只在本地会话加载，钉钉会话不会加载，避免外部消息触发远程命令
+- 资产里引用为 `ssh_key` 的密钥会被保护：agent 调用 `vault_get` 也拿不到，只能通过 `asset_exec` 使用
+- 每次执行写 `data/asset-exec-audit.log`，只记录资产、access、命令 SHA-256、命令长度、退出码和耗时，不记录命令正文或密钥
+- 远程命令以非交互模式执行，不支持需要 TTY 的交互式命令
+- 远程命令在目标机器上通过 shell 执行，不会有本地 shell 注入
+- 默认超时 60 秒，输出默认最多 12000 字符
+
+配置：
+
+```bash
+ASSET_EXEC_ENABLED=true
+ASSET_EXEC_TIMEOUT_SECONDS=60
+ASSET_EXEC_MAX_OUTPUT_CHARS=12000
+ASSET_EXEC_AUDIT_PATH=./data/asset-exec-audit.log
+```
+
+`asset_exec` 是高风险工具。当前只对显式标记 `exec=true` 的 SSH access 开放；如果只是让 agent 查看资产，使用 `asset_list` / `asset_get` / `asset_connection` 即可。
 
 ## 环境变量
 

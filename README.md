@@ -204,14 +204,14 @@ Agent 可通过 `vault_get` / `vault_list` 工具访问密钥。CI 或非 macOS 
 ```bash
 npm run assets -- add mac-mini --name "Mac mini" --kind server \
   --address 100.88.41.16 --tag mac --tag tailscale \
-  --access 'ssh:label=tailscale-ssh,port=22,user=renzelin,secret=macmini_ssh,secretKind=ssh_key'
+  --access 'ssh:label=tailscale-ssh,port=22,user=renzelin,secret=macmini_ssh,secretKind=ssh_key,exec=true'
 
 npm run assets -- list
 npm run assets -- show mac-mini
 npm run assets -- doctor
 ```
 
-Agent 可通过 `asset_list` / `asset_get` / `asset_connection` 查看有什么机器、怎么连、引用哪个密钥；这些工具不会返回密钥值。详细格式见 [`docs/ASSETS.md`](docs/ASSETS.md)。当前只提供连接信息，不会自动执行远程 SSH/RDP 命令。
+Agent 可通过 `asset_list` / `asset_get` / `asset_connection` 查看有什么机器、怎么连、引用哪个密钥；这些工具不会返回密钥值。对显式标记 `exec=true` 的 SSH access，本地 agent 还可以调用 `asset_exec` 远程执行命令；私钥在工具内部从 vault 读取，不会进入模型上下文。资产里标记为 `ssh_key` 的密钥也会从 `vault_get` 中屏蔽，`asset_exec` 不会加载到钉钉会话。详细格式和安全限制见 [`docs/ASSETS.md`](docs/ASSETS.md)。
 
 ### 任务外派
 

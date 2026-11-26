@@ -44,6 +44,7 @@ export interface AssetAccess {
   username?: string;
   secretName?: string;
   secretKind?: SecretKind;
+  execEnabled?: boolean;
   command?: string;
   notes?: string;
 }
@@ -71,6 +72,7 @@ export interface AssetAccessInput {
   username?: string;
   secretName?: string;
   secretKind?: SecretKind;
+  execEnabled?: boolean;
   command?: string;
   notes?: string;
 }

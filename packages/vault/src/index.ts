@@ -14,6 +14,7 @@ export {
   generateMasterKey,
   MASTER_KEY_BYTES,
 } from "./providers";
+export type { VaultToolOptions } from "./tool";
 export { createVaultTools } from "./tool";
 export type {
   MasterKeyProvider,

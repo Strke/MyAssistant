@@ -12,6 +12,8 @@ describe("loadConfig", () => {
     expect(config.tasks.backend).toBe("local");
     expect(config.assets.enabled).toBe(true);
     expect(config.assets.path).toBe("./data/assets.json");
+    expect(config.assetExec.enabled).toBe(false);
+    expect(config.assetExec.timeoutSeconds).toBe(60);
   });
 
   it("parses booleans and numbers from env strings", () => {

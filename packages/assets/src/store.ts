@@ -133,6 +133,7 @@ function normalizeAccess(
     username: clean(input.username),
     secretName,
     secretKind: normalizeSecretKind(input.secretKind),
+    execEnabled: input.execEnabled === true,
     command: clean(input.command),
     notes: clean(input.notes),
   };

@@ -39,8 +39,8 @@ Options for add/update:
   --location <location>
   --notes <text>
   --access <spec>                     Repeatable. Example:
-                                      ssh:label=tailscale,host=10.0.0.2,port=22,user=renze.lin,secret=macmini_ssh,secretKind=ssh_key
-                                      Keys: label, host, port, user, secret, secretKind, command, notes
+                                      ssh:label=tailscale,host=10.0.0.2,port=22,user=renze.lin,secret=macmini_ssh,secretKind=ssh_key,exec=true
+                                      Keys: label, host, port, user, secret, secretKind, exec, command, notes
   --access-json <json>                Repeatable. JSON object for complex access entries
 
 Secrets stay in the encrypted vault. Store them with:
@@ -123,6 +123,9 @@ function parseAccessSpec(spec: string): AssetAccessInput {
     username: attributes.user ?? attributes.username,
     secretName: attributes.secret ?? attributes.secretName,
     secretKind: (attributes.secretKind ?? attributes.kind) as SecretKind | undefined,
+    execEnabled: ["true", "1", "yes"].includes(
+      (attributes.exec ?? attributes.execEnabled ?? "").toLowerCase(),
+    ),
     command: attributes.command ?? attributes.cmd,
     notes: attributes.notes,
   };
@@ -196,7 +199,8 @@ function formatAsset(asset: Asset): string {
       const secret = access.secretName
         ? ` secret=${access.secretName}${access.secretKind ? ` (${access.secretKind})` : ""}`
         : "";
-      lines.push(`    - ${access.id}: ${access.method} ${user}${target}${port}${secret}`);
+      const exec = access.execEnabled ? " [exec]" : "";
+      lines.push(`    - ${access.id}: ${access.method} ${user}${target}${port}${secret}${exec}`);
     }
   }
   return `${lines.join("\n")}\n`;

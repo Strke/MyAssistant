@@ -6,25 +6,56 @@ interface VaultGetParams {
   name: string;
 }
 
-export function createVaultTools(vault: SecretStore): ToolDefinition[] {
+export interface VaultToolOptions {
+  protectedSecrets?: Iterable<string>;
+  isProtected?: (name: string) => boolean | Promise<boolean>;
+  protectedMessage?: string;
+}
+
+export function createVaultTools(
+  vault: SecretStore,
+  options: VaultToolOptions = {},
+): ToolDefinition[] {
+  const protectedSecrets = new Set(options.protectedSecrets ?? []);
+
   const vaultGet = defineTool({
     name: "vault_get",
     label: "Vault Get",
     description:
-      "Read a secret from the local encrypted vault by name. Returns the plaintext value; every access is audited.",
+      "Read a secret from the local encrypted vault by name. Returns the plaintext value; every access is audited. SSH keys referenced by assets are protected and must be used through asset_exec instead.",
     parameters: obj({
       name: str({ description: "Secret name, for example github_token." }),
     }),
     execute: async (_toolCallId, rawParams) => {
       const params = rawParams as VaultGetParams;
+      const protectedByList = protectedSecrets.has(params.name);
+      const protectedByPolicy = options.isProtected
+        ? await options.isProtected(params.name)
+        : false;
+      if (protectedByList || protectedByPolicy) {
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                options.protectedMessage ??
+                `Secret "${params.name}" is protected and cannot be returned to the model. Use asset_exec for SSH access.`,
+            },
+          ],
+          details: { found: false, protected: true } as Record<string, unknown>,
+        };
+      }
       const value = await vault.get(params.name);
       if (value === undefined) {
         return {
           content: [{ type: "text", text: `Secret not found: ${params.name}` }],
-          details: { found: false },
+          details: { found: false } as Record<string, unknown>,
         };
       }
-      return { content: [{ type: "text", text: value }], details: { found: true } };
+      return {
+        content: [{ type: "text", text: value }],
+        details: { found: true } as Record<string, unknown>,
+      };
     },
   });
 

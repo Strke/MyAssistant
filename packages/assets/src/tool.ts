@@ -74,7 +74,8 @@ function formatAssetLine(asset: Asset): string {
           const port = access.port ?? DEFAULT_PORTS[access.method];
           const user = access.username ? `${access.username}@` : "";
           const secret = access.secretName ? ` secret=${access.secretName}` : "";
-          return `${access.id}:${access.method} ${user}${target}${port ? `:${port}` : ""}${secret}`;
+          const exec = access.execEnabled ? " [exec]" : "";
+          return `${access.id}:${access.method} ${user}${target}${port ? `:${port}` : ""}${secret}${exec}`;
         })
         .join("; ")}`,
     );
@@ -234,6 +235,7 @@ export function createAssetTools(store: AssetStore): ToolDefinition[] {
         secretName: access.secretName,
         secretRef: access.secretName ? `vault://${access.secretName}` : undefined,
         secretKind: access.secretKind,
+        execEnabled: access.execEnabled === true,
         command: access.command ?? defaultCommand(asset, access),
         notes: access.notes,
       };

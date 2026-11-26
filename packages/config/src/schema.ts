@@ -89,6 +89,12 @@ export const appConfigSchema = z.object({
     enabled: envBoolean.default(true),
     path: z.string().min(1).default("./data/assets.json"),
   }),
+  assetExec: z.object({
+    enabled: envBoolean.default(false),
+    timeoutSeconds: z.coerce.number().int().positive().max(600).default(60),
+    maxOutputChars: z.coerce.number().int().positive().max(100_000).default(12_000),
+    auditPath: z.string().min(1).default("./data/asset-exec-audit.log"),
+  }),
   daemon: z.object({
     enabled: envBoolean.default(false),
     socketPath: z.string().min(1).default("./data/assistant.sock"),
@@ -205,6 +211,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     assets: {
       enabled: clean(env.ASSETS_ENABLED),
       path: clean(env.ASSETS_PATH),
+    },
+    assetExec: {
+      enabled: clean(env.ASSET_EXEC_ENABLED),
+      timeoutSeconds: clean(env.ASSET_EXEC_TIMEOUT_SECONDS),
+      maxOutputChars: clean(env.ASSET_EXEC_MAX_OUTPUT_CHARS),
+      auditPath: clean(env.ASSET_EXEC_AUDIT_PATH),
     },
     daemon: {
       enabled: clean(env.DAEMON_ENABLED),
